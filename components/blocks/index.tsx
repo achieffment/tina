@@ -1,5 +1,5 @@
 import { tinaField } from "tinacms/dist/react";
-import { Page, PageBlocks } from "../../tina/__generated__/types";
+import { Page, Service, PageBlocks, ServiceBlocks } from "../../tina/__generated__/types";
 import { Hero } from "./hero";
 import { Content } from "./content";
 import { Features } from "./features";
@@ -10,7 +10,7 @@ import { Stats } from "./stats";
 import { CallToAction } from "./call-to-action";
 import { Advantage } from "./advantage";
 
-export const Blocks = (props: Omit<Page, "id" | "_sys" | "_values">) => {
+export const Blocks = (props: Omit<Page | Service, "id" | "_sys" | "_values">) => {
   if (!props.blocks) return null;
   return (
     <>
@@ -25,7 +25,7 @@ export const Blocks = (props: Omit<Page, "id" | "_sys" | "_values">) => {
   );
 };
 
-const Block = (block: PageBlocks) => {
+const Block = (block: PageBlocks | ServiceBlocks) => {
   switch (block.__typename) {
     case "PageBlocksVideo":
       return <Video data={block} />;
@@ -44,6 +44,8 @@ const Block = (block: PageBlocks) => {
     case "PageBlocksCta":
       return <CallToAction data={block} />;
     case "PageBlocksAdvantage":
+      return <Advantage data={block} />;
+    case "ServiceBlocksAdvantage":
       return <Advantage data={block} />;
     default:
       return null;

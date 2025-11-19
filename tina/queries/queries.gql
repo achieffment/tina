@@ -18,6 +18,18 @@ query pageQuery {
       }
     }
   }
+  serviceConnection {
+    edges {
+      node {
+        id
+        name
+        description
+        _sys {
+          filename
+        }
+      }
+    }
+  }
 }
 
 query contentQuery($relativePath: String!) {
@@ -37,5 +49,12 @@ query blogPostQuery($relativePath: String!) {
         avatar
       }
     }
+  }
+}
+
+query serviceQuery($relativePath: String!) {
+  ...LayoutQueryFragment
+  service(relativePath: $relativePath) {
+    ...ServiceParts
   }
 }

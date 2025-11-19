@@ -1,13 +1,13 @@
 import type { Template } from "tinacms";
 import { tinaField } from "tinacms/dist/react";
-import { PageBlocksAdvantage } from "@/tina/__generated__/types";
+import { PageBlocksAdvantage, ServiceBlocksAdvantage } from "@/tina/__generated__/types";
 import { Section } from "../layout/section";
 import { sectionBlockSchemaField } from '../layout/section';
 import Image from 'next/image';
 
-export const Advantage = ({ data }: { data: PageBlocksAdvantage }) => {
+export const Advantage = ({ data }: { data: PageBlocksAdvantage | ServiceBlocksAdvantage }) => {
     return (
-        <Section background={data.background!}>
+        <Section>
             <div className="mx-auto max-w-5xl space-y-8 px-6">
                 <div className="grid gap-8 md:grid-cols-2 items-center">
                     {/* Text Column */}
@@ -54,11 +54,7 @@ export const advantageBlockSchema: Template = {
         previewSrc: "/blocks/stats.png",
         defaultItem: {
             title: "Why Choose Us",
-            description: "We provide exceptional service and cutting-edge solutions that help your business grow. Our team is dedicated to delivering results that exceed expectations.\n\nWith years of experience and a commitment to excellence, we're the partner you can trust.",
-            image: {
-                src: "/uploads/image_01.png",
-                alt: "Advantage illustration"
-            }
+            description: "We provide exceptional service and cutting-edge solutions that help your business grow. Our team is dedicated to delivering results that exceed expectations.\n\nWith years of experience and a commitment to excellence, we're the partner you can trust."
         },
     },
     fields: [
@@ -72,9 +68,6 @@ export const advantageBlockSchema: Template = {
             type: "string",
             label: "Description",
             name: "description",
-            ui: {
-                component: "textarea",
-            },
         },
         {
             type: "object",
@@ -82,15 +75,15 @@ export const advantageBlockSchema: Template = {
             name: "image",
             fields: [
                 {
-                    type: "image",
-                    label: "Image Source",
                     name: "src",
+                    label: "Image Source",
+                    type: "image",
                 },
                 {
-                    type: "string",
-                    label: "Alt Text",
                     name: "alt",
-                },
+                    label: "Alt Text",
+                    type: "string",
+                }
             ],
         },
     ],

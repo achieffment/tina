@@ -10,23 +10,25 @@ export const Advantage = ({ data }: { data: PageBlocksAdvantage | ServiceBlocksA
         <Section>
             <div className="mx-auto max-w-5xl space-y-8 px-6">
                 <div className="grid gap-8 md:grid-cols-2 items-center">
-                    {/* Text Column */}
+
                     <div className="space-y-6">
+
                         <h2
                             className="text-4xl font-medium lg:text-5xl"
                             data-tina-field={tinaField(data, 'title')}
                         >
                             {data.title}
                         </h2>
+
                         <div
                             className="text-lg leading-relaxed whitespace-pre-wrap"
                             data-tina-field={tinaField(data, 'description')}
                         >
                             {data.description}
                         </div>
+
                     </div>
 
-                    {/* Image Column */}
                     {data.image && data.image.src && (
                         <div
                             className="relative rounded-2xl overflow-hidden border shadow-lg"
@@ -41,6 +43,7 @@ export const Advantage = ({ data }: { data: PageBlocksAdvantage | ServiceBlocksA
                             />
                         </div>
                     )}
+
                 </div>
             </div>
         </Section>
@@ -51,7 +54,6 @@ export const advantageBlockSchema: Template = {
     name: "advantage",
     label: "Advantage",
     ui: {
-        previewSrc: "/blocks/stats.png",
         defaultItem: {
             title: "Why Choose Us",
             description: "We provide exceptional service and cutting-edge solutions that help your business grow. Our team is dedicated to delivering results that exceed expectations.\n\nWith years of experience and a commitment to excellence, we're the partner you can trust."

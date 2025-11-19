@@ -9,6 +9,9 @@ import { Callout } from "./callout";
 import { Stats } from "./stats";
 import { CallToAction } from "./call-to-action";
 import { Advantage } from "./advantage";
+import { RawHero } from "./raw-hero";
+import { RawFree } from "./raw-free";
+import { RawAi } from "./raw-ai";
 
 export const Blocks = (props: Omit<Page | Service, "id" | "_sys" | "_values">) => {
   if (!props.blocks) return null;
@@ -47,6 +50,12 @@ const Block = (block: PageBlocks | ServiceBlocks) => {
       return <Advantage data={block} />;
     case "ServiceBlocksAdvantage":
       return <Advantage data={block} />;
+    case "PageBlocksRawHero":
+      return <RawHero data={block} />;
+    case "PageBlocksRawFree":
+      return <RawFree data={block} />;
+    case "PageBlocksRawAi":
+      return <RawAi data={block} />;
     default:
       return null;
   }

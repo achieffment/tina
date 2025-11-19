@@ -8,6 +8,9 @@ import { calloutBlockSchema } from '@/components/blocks/callout';
 import { statsBlockSchema } from '@/components/blocks/stats';
 import { ctaBlockSchema } from '@/components/blocks/call-to-action';
 import { advantageBlockSchema } from '@/components/blocks/advantage';
+import { rawHeroBlockSchema } from '@/components/blocks/raw-hero';
+import { rawFreeBlockSchema } from '@/components/blocks/raw-free';
+import { rawAiBlockSchema } from '@/components/blocks/raw-ai';
 
 const Page: Collection = {
   label: 'Pages',
@@ -42,6 +45,9 @@ const Page: Collection = {
         testimonialBlockSchema,
         videoBlockSchema,
         advantageBlockSchema,
+        rawHeroBlockSchema,
+        rawFreeBlockSchema,
+        rawAiBlockSchema,
       ],
     },
   ],

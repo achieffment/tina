@@ -23,8 +23,14 @@ export default async function Page({
   // Формируем путь к файлу
   let filepath: string;
   if (isRussian) {
-    // Для русских маршрутов: /ru/about -> ru/about.mdx
-    filepath = urlSegments.join('/');
+    // Для русских маршрутов: /ru -> ru/home.mdx, /ru/about -> ru/about.mdx
+    if (urlSegments.length === 1) {
+      // Только /ru - главная страница
+      filepath = 'ru/home';
+    } else {
+      // /ru/about -> ru/about
+      filepath = urlSegments.join('/');
+    }
   } else {
     // Для английских маршрутов: /about -> en/about.mdx
     filepath = `en/${urlSegments.join('/')}`;
@@ -78,9 +84,14 @@ export async function generateStaticParams() {
       const locale = breadcrumbs[0];
       const pathParts = breadcrumbs.slice(1);
       
-      // Исключаем home страницы (они обрабатываются отдельно)
-      if (pathParts.length === 1 && pathParts[0] === 'home') {
+      // Для английской локали: исключаем home (обрабатывается в app/page.tsx)
+      if (locale === 'en' && pathParts.length === 1 && pathParts[0] === 'home') {
         return null;
+      }
+      
+      // Для русской локали: home становится /ru
+      if (locale === 'ru' && pathParts.length === 1 && pathParts[0] === 'home') {
+        return { urlSegments: ['ru'] };
       }
       
       // Для английских маршрутов: en/about -> /about

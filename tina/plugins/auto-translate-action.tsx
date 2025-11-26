@@ -102,41 +102,26 @@ const TranslateScreen: React.FC<{ close: () => void }> = ({ close }) => {
       
       console.log('New relative path:', newRelativePath);
 
-      // Очищаем документ от служебных полей, которые не принимает GraphQL
-      const cleanDocument = { ...translatedDocument };
-      delete cleanDocument._collection;
-      delete cleanDocument._template;
-      
-      console.log('Clean document:', cleanDocument);
+      // Создаём файл напрямую через наш API endpoint
+      const createFileResponse = await fetch('/api/create-translated-file', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          relativePath: newRelativePath,
+          collection,
+          document: translatedDocument,
+        }),
+      });
 
-      // Создаём новый документ через TinaCMS API
-      if (!cms.api?.tina) {
-        throw new Error('TinaCMS API not available');
+      if (!createFileResponse.ok) {
+        const error = await createFileResponse.json();
+        throw new Error(error.error || 'Failed to create file');
       }
-      
-      await cms.api.tina.request(
-        `
-        mutation CreateDocument($collection: String!, $relativePath: String!, $params: DocumentMutation!) {
-          createDocument(collection: $collection, relativePath: $relativePath, params: $params) {
-            __typename
-            ... on Document {
-              _sys {
-                filename
-                path
-                relativePath
-              }
-            }
-          }
-        }
-      `,
-        {
-          variables: {
-            collection,
-            relativePath: newRelativePath,
-            params: cleanDocument,
-          },
-        }
-      );
+
+      const { path: createdFilePath } = await createFileResponse.json();
+      console.log('Created file:', createdFilePath);
       
       setStatus(`✅ Документ переведён на ${targetLocale.toUpperCase()}!`);
       setIsTranslating(false);

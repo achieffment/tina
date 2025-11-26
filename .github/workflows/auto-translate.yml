@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [closed]
     paths:
-      - 'content/**/ru/**'
+      - 'content/**/en/**'
 
 jobs:
   translate:
@@ -74,7 +74,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_TITLE="Auto-translate content from PR #${{ steps.pr.outputs.number }}"
-          PR_BODY="This PR contains automatic English translations for the content updated in PR #${{ steps.pr.outputs.number }}.
+          PR_BODY="This PR contains automatic Russian translations for the content updated in PR #${{ steps.pr.outputs.number }}.
           
           **⚠️ Please review the translations before merging!**
           

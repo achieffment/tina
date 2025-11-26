@@ -17,17 +17,17 @@ export default async function Page({
   
   // Определяем локаль и путь
   const firstSegment = urlSegments[0];
-  const isEnglish = firstSegment === 'en';
-  const locale = isEnglish ? 'en' : 'ru';
+  const isRussian = firstSegment === 'ru';
+  const locale = isRussian ? 'ru' : 'en';
   
   // Формируем путь к файлу
   let filepath: string;
-  if (isEnglish) {
-    // Для английских маршрутов: /en/about -> en/about.mdx
+  if (isRussian) {
+    // Для русских маршрутов: /ru/about -> ru/about.mdx
     filepath = urlSegments.join('/');
   } else {
-    // Для русских маршрутов: /about -> ru/about.mdx
-    filepath = `ru/${urlSegments.join('/')}`;
+    // Для английских маршрутов: /about -> en/about.mdx
+    filepath = `en/${urlSegments.join('/')}`;
   }
 
   let data;
@@ -83,9 +83,9 @@ export async function generateStaticParams() {
         return null;
       }
       
-      // Для русских маршрутов: ru/about -> /about
-      // Для английских маршрутов: en/about -> /en/about
-      if (locale === 'ru') {
+      // Для английских маршрутов: en/about -> /about
+      // Для русских маршрутов: ru/about -> /ru/about
+      if (locale === 'en') {
         return { urlSegments: pathParts };
       } else {
         return { urlSegments: [locale, ...pathParts] };

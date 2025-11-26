@@ -77,14 +77,14 @@ async function getChangedFiles() {
 
     const files = await response.json();
     
-    // Фильтруем только MDX файлы из content/ в локали ru
+    // Фильтруем только MDX файлы из content/ в локали en
     return files
       .filter((file) => {
         const path = file.filename;
         return (
           path.startsWith('content/') &&
           (path.endsWith('.mdx') || path.endsWith('.md')) &&
-          path.includes('/ru/')
+          path.includes('/en/')
         );
       })
       .map((file) => file.filename);
@@ -109,8 +109,8 @@ async function translateFile(filePath) {
   // Читаем содержимое файла
   const content = readFileSync(fullPath, 'utf-8');
 
-  // Определяем путь для переведённого файла (ru -> en)
-  const targetPath = filePath.replace('/ru/', '/en/');
+  // Определяем путь для переведённого файла (en -> ru)
+  const targetPath = filePath.replace('/en/', '/ru/');
   const targetFullPath = join(rootDir, targetPath);
 
   // Проверяем, не существует ли уже переведённый файл
@@ -121,7 +121,7 @@ async function translateFile(filePath) {
 
   // Переводим содержимое
   try {
-    const translatedContent = await translateText(content, 'en', 'ru');
+    const translatedContent = await translateText(content, 'ru', 'en');
 
     // Создаём директорию, если её нет
     const targetDir = dirname(targetFullPath);

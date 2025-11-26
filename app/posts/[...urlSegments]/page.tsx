@@ -15,16 +15,16 @@ export default async function PostPage({
   
   // Определяем, является ли первый сегмент локалью
   const firstSegment = urlSegments[0];
-  const locale = firstSegment === 'en' ? 'en' : 'ru';
+  const locale = firstSegment === 'ru' ? 'ru' : 'en';
   
   // Формируем путь к файлу
   let filepath: string;
-  if (firstSegment === 'en') {
-    // /posts/en/... - английская версия, убираем 'en' из пути
-    filepath = ['en', ...urlSegments.slice(1)].join('/');
+  if (firstSegment === 'ru') {
+    // /posts/ru/... - русская версия, убираем 'ru' из пути
+    filepath = ['ru', ...urlSegments.slice(1)].join('/');
   } else {
-    // /posts/... - русская версия
-    filepath = ['ru', ...urlSegments].join('/');
+    // /posts/... - английская версия
+    filepath = ['en', ...urlSegments].join('/');
   }
   
   const data = await client.queries.post({
@@ -68,9 +68,9 @@ export async function generateStaticParams() {
       const locale = breadcrumbs[0];
       const pathParts = breadcrumbs.slice(1);
       
-      // Для русских маршрутов: ru/post -> /posts/post
-      // Для английских маршрутов: en/post -> /posts/en/post
-      if (locale === 'ru') {
+      // Для английских маршрутов: en/post -> /posts/post
+      // Для русских маршрутов: ru/post -> /posts/ru/post
+      if (locale === 'en') {
         return { urlSegments: pathParts };
       } else {
         return { urlSegments: [locale, ...pathParts] };

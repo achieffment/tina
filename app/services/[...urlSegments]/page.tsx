@@ -15,16 +15,16 @@ export default async function ServicePage({
   
   // Определяем, является ли первый сегмент локалью
   const firstSegment = urlSegments[0];
-  const locale = firstSegment === 'en' ? 'en' : 'ru';
+  const locale = firstSegment === 'ru' ? 'ru' : 'en';
   
   // Формируем путь к файлу
   let filepath: string;
-  if (firstSegment === 'en') {
-    // /services/en/... - английская версия
-    filepath = ['en', ...urlSegments.slice(1)].join('/');
+  if (firstSegment === 'ru') {
+    // /services/ru/... - русская версия
+    filepath = ['ru', ...urlSegments.slice(1)].join('/');
   } else {
-    // /services/... - русская версия
-    filepath = ['ru', ...urlSegments].join('/');
+    // /services/... - английская версия
+    filepath = ['en', ...urlSegments].join('/');
   }
   
   const data = await client.queries.service({
@@ -68,9 +68,9 @@ export async function generateStaticParams() {
       const locale = breadcrumbs[0];
       const pathParts = breadcrumbs.slice(1);
       
-      // Для русских маршрутов: ru/service -> /services/service
-      // Для английских маршрутов: en/service -> /services/en/service
-      if (locale === 'ru') {
+      // Для английских маршрутов: en/service -> /services/service
+      // Для русских маршрутов: ru/service -> /services/ru/service
+      if (locale === 'en') {
         return { urlSegments: pathParts };
       } else {
         return { urlSegments: [locale, ...pathParts] };

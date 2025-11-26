@@ -13,10 +13,10 @@ const Post: Collection = {
     router: ({ document }) => {
       // Breadcrumbs: [locale, ...path]
       const breadcrumbs = document._sys.breadcrumbs;
-      const locale = breadcrumbs[0]; // ru or en
+      const locale = breadcrumbs[0]; // en or ru
       const pathParts = breadcrumbs.slice(1);
       
-      if (locale === 'ru') {
+      if (locale === 'en') {
         return `/posts/${pathParts.join('/')}`;
       }
       return `/${locale}/posts/${pathParts.join('/')}`;

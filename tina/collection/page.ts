@@ -22,13 +22,13 @@ const Page: Collection = {
     router: ({ document }) => {
       // Breadcrumbs: [locale, filename] or [filename]
       const breadcrumbs = document._sys.breadcrumbs;
-      const locale = breadcrumbs[0]; // ru or en
+      const locale = breadcrumbs[0]; // en or ru
       const filename = breadcrumbs[breadcrumbs.length - 1];
       
       if (filename === 'home') {
-        return locale === 'ru' ? '/' : `/${locale}`;
+        return locale === 'en' ? '/' : `/${locale}`;
       }
-      return locale === 'ru' ? `/${filename}` : `/${locale}/${filename}`;
+      return locale === 'en' ? `/${filename}` : `/${locale}/${filename}`;
     },
   },
   fields: wrapStringFields([

@@ -9,7 +9,15 @@ const Service: Collection = {
     format: "mdx",
     ui: {
         router: ({ document }) => {
-            return `/services/${document._sys.breadcrumbs.join('/')}`;
+            // Breadcrumbs: [locale, ...path]
+            const breadcrumbs = document._sys.breadcrumbs;
+            const locale = breadcrumbs[0]; // ru or en
+            const pathParts = breadcrumbs.slice(1);
+            
+            if (locale === 'ru') {
+                return `/services/${pathParts.join('/')}`;
+            }
+            return `/${locale}/services/${pathParts.join('/')}`;
         },
     },
     fields: wrapStringFields([

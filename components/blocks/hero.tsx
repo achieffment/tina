@@ -10,7 +10,6 @@ import { Icon } from '../icon';
 import { Section, sectionBlockSchemaField } from '../layout/section';
 import { Button } from '../ui/button';
 import HeroVideoDialog from '../ui/hero-video-dialog';
-import { clean } from '@/tina/plugins/auto-translation-indicator';
 
 export const Hero = ({ data }: { data: PageBlocksHero }) => {
   // Extract the background style logic into a more readable format
@@ -33,12 +32,12 @@ export const Hero = ({ data }: { data: PageBlocksHero }) => {
       <div className='text-center sm:mx-auto lg:mr-auto lg:mt-0'>
         {data.headline && (
           <h1 data-tina-field={tinaField(data, 'headline')} className='mt-8 text-balance text-6xl md:text-7xl xl:text-[5.25rem]'>
-            {clean(data.headline)}
+            {data.headline}
           </h1>
         )}
         {data.tagline && (
           <p data-tina-field={tinaField(data, 'tagline')} className='mx-auto mt-8 max-w-2xl text-balance text-lg'>
-            {clean(data.tagline)}
+            {data.tagline}
           </p>
         )}
 
@@ -49,7 +48,7 @@ export const Hero = ({ data }: { data: PageBlocksHero }) => {
                 <Button asChild size='lg' variant={action!.type === 'link' ? 'ghost' : 'default'} className='rounded-xl px-5 text-base'>
                   <Link href={action!.link!}>
                     {action?.icon && <Icon data={action?.icon} />}
-                    <span className='text-nowrap'>{clean(action!.label)}</span>
+                    <span className='text-nowrap'>{action!.label}</span>
                   </Link>
                 </Button>
               </div>

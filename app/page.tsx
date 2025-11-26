@@ -6,8 +6,9 @@ import ClientPage from "./[...urlSegments]/client-page";
 export const revalidate = 300;
 
 export default async function Home() {
+  // По умолчанию показываем русскую версию
   const data = await client.queries.page({
-    relativePath: `home.mdx`,
+    relativePath: `ru/home.mdx`,
   });
 
   return (

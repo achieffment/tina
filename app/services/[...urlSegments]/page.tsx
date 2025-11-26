@@ -11,7 +11,22 @@ export default async function ServicePage({
   params: Promise<{ urlSegments: string[] }>;
 }) {
   const resolvedParams = await params;
-  const filepath = resolvedParams.urlSegments.join('/');
+  const urlSegments = resolvedParams.urlSegments;
+  
+  // Определяем, является ли первый сегмент локалью
+  const firstSegment = urlSegments[0];
+  const locale = firstSegment === 'en' ? 'en' : 'ru';
+  
+  // Формируем путь к файлу
+  let filepath: string;
+  if (firstSegment === 'en') {
+    // /services/en/... - английская версия
+    filepath = ['en', ...urlSegments.slice(1)].join('/');
+  } else {
+    // /services/... - русская версия
+    filepath = ['ru', ...urlSegments].join('/');
+  }
+  
   const data = await client.queries.service({
     relativePath: `${filepath}.mdx`,
   });
@@ -44,9 +59,24 @@ export async function generateStaticParams() {
   }
 
   const params =
-    allServices.data?.serviceConnection.edges.map((edge) => ({
-      urlSegments: edge?.node?._sys.breadcrumbs,
-    })) || [];
+    allServices.data?.serviceConnection.edges.map((edge) => {
+      const breadcrumbs = edge?.node?._sys.breadcrumbs || [];
+      // breadcrumbs: [locale, ...path] например: ['ru', 'service'] или ['en', 'service']
+      
+      if (breadcrumbs.length === 0) return null;
+      
+      const locale = breadcrumbs[0];
+      const pathParts = breadcrumbs.slice(1);
+      
+      // Для русских маршрутов: ru/service -> /services/service
+      // Для английских маршрутов: en/service -> /services/en/service
+      if (locale === 'ru') {
+        return { urlSegments: pathParts };
+      } else {
+        return { urlSegments: [locale, ...pathParts] };
+      }
+    })
+    .filter((x) => x !== null) || [];
 
   return params;
 }

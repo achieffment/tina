@@ -11,7 +11,22 @@ export default async function PostPage({
   params: Promise<{ urlSegments: string[] }>;
 }) {
   const resolvedParams = await params;
-  const filepath = resolvedParams.urlSegments.join('/');
+  const urlSegments = resolvedParams.urlSegments;
+  
+  // Определяем, является ли первый сегмент локалью
+  const firstSegment = urlSegments[0];
+  const locale = firstSegment === 'en' ? 'en' : 'ru';
+  
+  // Формируем путь к файлу
+  let filepath: string;
+  if (firstSegment === 'en') {
+    // /posts/en/... - английская версия, убираем 'en' из пути
+    filepath = ['en', ...urlSegments.slice(1)].join('/');
+  } else {
+    // /posts/... - русская версия
+    filepath = ['ru', ...urlSegments].join('/');
+  }
+  
   const data = await client.queries.post({
     relativePath: `${filepath}.mdx`,
   });
@@ -44,9 +59,24 @@ export async function generateStaticParams() {
   }
 
   const params =
-    allPosts.data?.postConnection.edges.map((edge) => ({
-      urlSegments: edge?.node?._sys.breadcrumbs,
-    })) || [];
+    allPosts.data?.postConnection.edges.map((edge) => {
+      const breadcrumbs = edge?.node?._sys.breadcrumbs || [];
+      // breadcrumbs: [locale, ...path] например: ['ru', 'june', 'post'] или ['en', 'post']
+      
+      if (breadcrumbs.length === 0) return null;
+      
+      const locale = breadcrumbs[0];
+      const pathParts = breadcrumbs.slice(1);
+      
+      // Для русских маршрутов: ru/post -> /posts/post
+      // Для английских маршрутов: en/post -> /posts/en/post
+      if (locale === 'ru') {
+        return { urlSegments: pathParts };
+      } else {
+        return { urlSegments: [locale, ...pathParts] };
+      }
+    })
+    .filter((x) => x !== null) || [];
 
   return params;
 }

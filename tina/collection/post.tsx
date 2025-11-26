@@ -11,7 +11,15 @@ const Post: Collection = {
   format: 'mdx',
   ui: {
     router: ({ document }) => {
-      return `/posts/${document._sys.breadcrumbs.join('/')}`;
+      // Breadcrumbs: [locale, ...path]
+      const breadcrumbs = document._sys.breadcrumbs;
+      const locale = breadcrumbs[0]; // ru or en
+      const pathParts = breadcrumbs.slice(1);
+      
+      if (locale === 'ru') {
+        return `/posts/${pathParts.join('/')}`;
+      }
+      return `/${locale}/posts/${pathParts.join('/')}`;
     },
   },
   fields: wrapStringFields([

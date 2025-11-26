@@ -1,9 +1,6 @@
 'use client';
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { wrapFieldsWithMeta } from 'tinacms';
-
-// Эмодзи маркер для определения автоматически переведенных полей
-const AUTO_TRANSLATION_EMOJI = '🤖';
 
 // Компонент индикатора автоматического перевода
 const AutoTranslationBadge: React.FC = () => {
@@ -27,30 +24,63 @@ const AutoTranslationBadge: React.FC = () => {
   );
 };
 
-// Простая утилита для очистки эмодзи из текста
-export function clean(text: string | null | undefined): string {
-  if (!text || typeof text !== 'string') return text || '';
-  return text.replace(new RegExp(AUTO_TRANSLATION_EMOJI, 'g'), '');
+// Вспомогательная функция для получения значения по пути
+function getValueByPath(obj: any, path: string): any {
+  if (!path) return obj;
+  return path.split('.').reduce((acc, part) => acc?.[part], obj);
 }
 
-// Обертка для строковых полей с поддержкой детекции автоперевода
-export const AutoTranslatedStringInput = wrapFieldsWithMeta<any>(({ field, input, meta }) => {
-  // Проверяем, содержит ли ИСХОДНОЕ значение эмодзи маркер
+// Обертка для строковых полей с поддержкой детекции автоперевода на основе метаданных
+export const AutoTranslatedStringInput = wrapFieldsWithMeta<any>(({ field, input, meta, form }) => {
+  // Извлекаем имя поля и путь к родительскому блоку
+  const { fieldName, parentPath } = useMemo(() => {
+    // input.name может быть например "blocks.1.headline"
+    const parts = input.name.split('.');
+    return {
+      fieldName: parts[parts.length - 1], // "headline"
+      parentPath: parts.slice(0, -1).join('.'), // "blocks.1"
+    };
+  }, [input.name]);
+
+  // Получаем список автопереведенных полей из родительского блока
+  const autoTranslatedFields = useMemo(() => {
+    try {
+      // Пробуем через form.getState()
+      if (form?.getState) {
+        const formState = form.getState();
+        if (formState.values && parentPath) {
+          const parentValue = getValueByPath(formState.values, parentPath);
+          return (parentValue?._autoTranslatedFields as string[]) || [];
+        }
+      }
+      
+      return [];
+    } catch (error) {
+      return [];
+    }
+  }, [form, parentPath]);
+
+  // Проверяем, является ли поле автопереведенным
   const hasAutoTranslation = useMemo(() => {
-    return typeof input.value === 'string' && input.value.includes(AUTO_TRANSLATION_EMOJI);
-  }, [input.value]);
+    return autoTranslatedFields.includes(fieldName);
+  }, [autoTranslatedFields, fieldName]);
 
   // Обработчик изменения значения
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    // Сохраняем новое значение в форму напрямую
-    input.onChange(e.target.value);
-  };
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    
+    // Сохраняем новое значение
+    input.onChange(newValue);
+
+    // Если поле было автопереведено, удаляем его из списка родительского блока
+    if (hasAutoTranslation && form && parentPath) {
+      const updatedFields = autoTranslatedFields.filter(f => f !== fieldName);
+      form.change(`${parentPath}._autoTranslatedFields`, updatedFields);
+    }
+  }, [input, hasAutoTranslation, autoTranslatedFields, fieldName, parentPath, form]);
 
   // Определяем, является ли поле textarea
   const isTextarea = field.component === 'textarea' || field.ui?.component === 'textarea';
-
-  // Отображаем очищенное значение (без эмодзи) для удобства редактирования
-  const displayValue = clean(input.value);
 
   return (
     <div className="auto-translation-field-wrapper">
@@ -90,7 +120,7 @@ export const AutoTranslatedStringInput = wrapFieldsWithMeta<any>(({ field, input
         <textarea
           id={input.name}
           name={input.name}
-          value={displayValue}
+          value={input.value || ''}
           onChange={handleChange}
           onBlur={input.onBlur}
           onFocus={input.onFocus}
@@ -113,7 +143,7 @@ export const AutoTranslatedStringInput = wrapFieldsWithMeta<any>(({ field, input
           type="text"
           id={input.name}
           name={input.name}
-          value={displayValue}
+          value={input.value || ''}
           onChange={handleChange}
           onBlur={input.onBlur}
           onFocus={input.onFocus}
@@ -145,9 +175,22 @@ export const AutoTranslatedStringInput = wrapFieldsWithMeta<any>(({ field, input
   );
 });
 
+// Схема поля для хранения автопереведенных полей
+const autoTranslatedFieldSchema = {
+  type: 'string',
+  name: '_autoTranslatedFields',
+  list: true,
+  ui: { component: () => null },
+};
+
 // Функция для автоматического применения компонента к строковым полям
 export function wrapStringFields(fields: any[]): any[] {
   return fields.map((field) => {
+    // Пропускаем служебные поля
+    if (field.name === '_autoTranslated' || field.name === '_autoTranslatedFields') {
+      return field;
+    }
+
     // Если поле - это строка, применяем наш компонент
     if (field.type === 'string') {
       // Если уже есть кастомный компонент, пропускаем только специальные случаи
@@ -155,12 +198,7 @@ export function wrapStringFields(fields: any[]): any[] {
         field.ui.component !== 'text' && 
         field.ui.component !== 'textarea';
       
-      if (hasCustomComponent) {
-        // Пропускаем поля с реально кастомными компонентами
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[AutoTranslation] Skipping field with custom component:', field.name, field.ui.component);
-        }
-      } else {
+      if (!hasCustomComponent) {
         return {
           ...field,
           ui: {
@@ -179,25 +217,20 @@ export function wrapStringFields(fields: any[]): any[] {
       };
     }
 
-    // Обрабатываем templates (для rich-text и других сложных типов)
+    // Обрабатываем templates - автоматически добавляем поле _autoTranslatedFields
     if (field.templates && Array.isArray(field.templates)) {
       return {
         ...field,
-        templates: field.templates.map((template: any) => {
-          if (template.fields) {
-            return {
-              ...template,
-              fields: wrapStringFields(template.fields),
-            };
-          }
-          return template;
-        }),
+        templates: field.templates.map((template: any) => ({
+          ...template,
+          fields: [
+            autoTranslatedFieldSchema,
+            ...wrapStringFields(template.fields || []),
+          ],
+        })),
       };
     }
 
     return field;
   });
 }
-
-// Экспорт утилит для использования в конфигурации
-export { AUTO_TRANSLATION_EMOJI };

@@ -20,11 +20,15 @@ const Page: Collection = {
   format: 'mdx',
   ui: {
     router: ({ document }) => {
-      const filepath = document._sys.breadcrumbs.join('/');
-      if (filepath === 'home') {
-        return '/';
+      // Breadcrumbs: [locale, filename] or [filename]
+      const breadcrumbs = document._sys.breadcrumbs;
+      const locale = breadcrumbs[0]; // ru or en
+      const filename = breadcrumbs[breadcrumbs.length - 1];
+      
+      if (filename === 'home') {
+        return locale === 'ru' ? '/' : `/${locale}`;
       }
-      return `/${filepath}`;
+      return locale === 'ru' ? `/${filename}` : `/${locale}/${filename}`;
     },
   },
   fields: wrapStringFields([

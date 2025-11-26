@@ -13,7 +13,22 @@ export default async function Page({
   params: Promise<{ urlSegments: string[] }>;
 }) {
   const resolvedParams = await params;
-  const filepath = resolvedParams.urlSegments.join('/');
+  const urlSegments = resolvedParams.urlSegments;
+  
+  // Определяем локаль и путь
+  const firstSegment = urlSegments[0];
+  const isEnglish = firstSegment === 'en';
+  const locale = isEnglish ? 'en' : 'ru';
+  
+  // Формируем путь к файлу
+  let filepath: string;
+  if (isEnglish) {
+    // Для английских маршрутов: /en/about -> en/about.mdx
+    filepath = urlSegments.join('/');
+  } else {
+    // Для русских маршрутов: /about -> ru/about.mdx
+    filepath = `ru/${urlSegments.join('/')}`;
+  }
 
   let data;
   try {
@@ -54,11 +69,29 @@ export async function generateStaticParams() {
   }
 
   const params = allPages.data?.pageConnection.edges
-    .map((edge) => ({
-      urlSegments: edge?.node?._sys.breadcrumbs || [],
-    }))
-    .filter((x) => x.urlSegments.length >= 1)
-    .filter((x) => !x.urlSegments.every((x) => x === 'home')); // exclude the home page
+    .map((edge) => {
+      const breadcrumbs = edge?.node?._sys.breadcrumbs || [];
+      // breadcrumbs: [locale, filename] например: ['ru', 'about'] или ['en', 'about']
+      
+      if (breadcrumbs.length === 0) return null;
+      
+      const locale = breadcrumbs[0];
+      const pathParts = breadcrumbs.slice(1);
+      
+      // Исключаем home страницы (они обрабатываются отдельно)
+      if (pathParts.length === 1 && pathParts[0] === 'home') {
+        return null;
+      }
+      
+      // Для русских маршрутов: ru/about -> /about
+      // Для английских маршрутов: en/about -> /en/about
+      if (locale === 'ru') {
+        return { urlSegments: pathParts };
+      } else {
+        return { urlSegments: [locale, ...pathParts] };
+      }
+    })
+    .filter((x) => x !== null);
 
   return params;
 }

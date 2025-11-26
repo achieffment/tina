@@ -11,6 +11,7 @@ import { advantageBlockSchema } from '@/components/blocks/advantage';
 import { rawHeroBlockSchema } from '@/components/blocks/raw-hero';
 import { rawFreeBlockSchema } from '@/components/blocks/raw-free';
 import { rawAiBlockSchema } from '@/components/blocks/raw-ai';
+import { wrapStringFields } from '@/tina/plugins/auto-translation-indicator';
 
 const Page: Collection = {
   label: 'Pages',
@@ -26,7 +27,7 @@ const Page: Collection = {
       return `/${filepath}`;
     },
   },
-  fields: [
+  fields: wrapStringFields([
     {
       type: 'object',
       list: true,
@@ -50,7 +51,7 @@ const Page: Collection = {
         rawAiBlockSchema,
       ],
     },
-  ],
+  ]),
 };
 
 export default Page;

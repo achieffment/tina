@@ -2,6 +2,7 @@ import React from 'react';
 import { videoBlockSchema } from '@/components/blocks/video';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Collection } from 'tinacms';
+import { wrapStringFields } from '@/tina/plugins/auto-translation-indicator';
 
 const Post: Collection = {
   label: 'Blog Posts',
@@ -13,7 +14,7 @@ const Post: Collection = {
       return `/posts/${document._sys.breadcrumbs.join('/')}`;
     },
   },
-  fields: [
+  fields: wrapStringFields([
     {
       type: 'string',
       label: 'Title',
@@ -182,7 +183,7 @@ const Post: Collection = {
       ],
       isBody: true,
     },
-  ],
+  ]),
 };
 
 export default Post;

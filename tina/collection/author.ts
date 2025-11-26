@@ -1,11 +1,12 @@
 import type { Collection } from "tinacms";
+import { wrapStringFields } from '@/tina/plugins/auto-translation-indicator';
 
 const Author: Collection = {
   label: "Authors",
   name: "author",
   path: "content/authors",
   format: "md",
-  fields: [
+  fields: wrapStringFields([
     {
       type: "string",
       label: "Name",
@@ -20,6 +21,6 @@ const Author: Collection = {
       // @ts-ignore
       uploadDir: () => "authors",
     },
-  ],
+  ]),
 };
 export default Author;

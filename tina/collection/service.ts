@@ -1,5 +1,6 @@
 import { advantageBlockSchema } from "@/components/blocks/advantage";
 import type { Collection } from "tinacms";
+import { wrapStringFields } from '@/tina/plugins/auto-translation-indicator';
 
 const Service: Collection = {
     label: "Services",
@@ -11,7 +12,7 @@ const Service: Collection = {
             return `/services/${document._sys.breadcrumbs.join('/')}`;
         },
     },
-    fields: [
+    fields: wrapStringFields([
         {
             type: "string",
             label: "Name",
@@ -36,6 +37,6 @@ const Service: Collection = {
                 advantageBlockSchema,
             ],
         },
-    ],
+    ]),
 };
 export default Service;

@@ -1,11 +1,12 @@
 import type { Collection } from "tinacms";
+import { wrapStringFields } from '@/tina/plugins/auto-translation-indicator';
 
 const Tag: Collection = {
   label: "Tags",
   name: "tag",
   path: "content/tags",
   format: "mdx",
-  fields: [
+  fields: wrapStringFields([
     {
       type: "string",
       label: "Name",
@@ -13,7 +14,7 @@ const Tag: Collection = {
       isTitle: true,
       required: true,
     },
-  ],
+  ]),
 };
 
 export default Tag;

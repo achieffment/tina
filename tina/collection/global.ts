@@ -2,6 +2,7 @@ import type { Collection } from "tinacms";
 import { ColorPickerInput } from "../fields/color";
 import { iconSchema } from "../fields/icon";
 import { icon } from "mermaid/dist/rendering-util/rendering-elements/shapes/icon.js";
+import { wrapStringFields } from '@/tina/plugins/auto-translation-indicator';
 
 const Global: Collection = {
   label: "Global",
@@ -11,7 +12,7 @@ const Global: Collection = {
   ui: {
     global: true,
   },
-  fields: [
+  fields: wrapStringFields([
     {
       type: "object",
       label: "Header",
@@ -141,7 +142,7 @@ const Global: Collection = {
         },
       ],
     },
-  ],
+  ]),
 };
 
 export default Global;

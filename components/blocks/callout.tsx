@@ -4,41 +4,20 @@ import type { Template } from 'tinacms';
 import { tinaField } from 'tinacms/dist/react';
 import { PageBlocksCallout } from '@/tina/__generated__/types';
 import { ArrowRight } from 'lucide-react';
-import { AnimatedGroup } from '../motion-primitives/animated-group';
 import { Section, sectionBlockSchemaField } from '../layout/section';
-import type { Transition } from 'motion/react';
-
-const transitionVariants = {
-    item: {
-        hidden: {
-            opacity: 0,
-            filter: 'blur(12px)',
-            y: 12,
-        },
-        visible: {
-            opacity: 1,
-            filter: 'blur(0px)',
-            y: 0,
-            transition: {
-                type: 'spring',
-                bounce: 0.3,
-                duration: 1.5,
-            } as Transition,
-        },
-    },
-};
+import { clean } from '@/tina/plugins/auto-translation-indicator';
 
 export const Callout = ({ data }: { data: PageBlocksCallout }) => {
     return (
         <Section background={data.background!} className='py-6'>
-            <AnimatedGroup variants={transitionVariants}>
+            <div>
                 <Link
                     data-tina-field={tinaField(data, 'url')}
                     href={data.url!}
                     className='hover:bg-background dark:hover:border-t-border bg-muted group mx-auto flex w-fit items-center gap-4 rounded-full border p-1 pl-4 shadow-md shadow-zinc-950/5 transition-colors duration-300 dark:border-t-white/5 dark:shadow-zinc-950'
                 >
                     <span data-tina-field={tinaField(data, 'text')} className='text-foreground text-sm'>
-                        {data.text}
+                        {clean(data.text)}
                     </span>
                     <span className='dark:border-background block h-4 w-0.5 border-l bg-white dark:bg-zinc-700'></span>
 
@@ -53,7 +32,7 @@ export const Callout = ({ data }: { data: PageBlocksCallout }) => {
                         </div>
                     </div>
                 </Link>
-            </AnimatedGroup>
+            </div>
         </Section>
     );
 };

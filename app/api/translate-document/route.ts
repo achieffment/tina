@@ -172,26 +172,26 @@ async function translateFields(
       } else {
         const result = await translateFields(value, apiKey, targetLocale, sourceLocale, []);
         translatedObj[key] = result.translated;
-      }
-      
-      // Для блоков добавляем _autoTranslatedFields
-      if (key === 'blocks' && Array.isArray(result.translated)) {
-        translatedObj[key] = result.translated.map((block: any) => {
-          if (block._autoTranslatedFields && block._autoTranslatedFields.length > 0) {
-            return block;
-          }
-          // Определяем переведённые поля в блоке
-          const blockFields: string[] = [];
-          for (const blockKey of Object.keys(block)) {
-            if (typeof block[blockKey] === 'string' && !blockKey.startsWith('_')) {
-              blockFields.push(blockKey);
+        
+        // Для блоков добавляем _autoTranslatedFields
+        if (key === 'blocks' && Array.isArray(result.translated)) {
+          translatedObj[key] = result.translated.map((block: any) => {
+            if (block._autoTranslatedFields && block._autoTranslatedFields.length > 0) {
+              return block;
             }
-          }
-          return {
-            ...block,
-            _autoTranslatedFields: blockFields,
-          };
-        });
+            // Определяем переведённые поля в блоке
+            const blockFields: string[] = [];
+            for (const blockKey of Object.keys(block)) {
+              if (typeof block[blockKey] === 'string' && !blockKey.startsWith('_')) {
+                blockFields.push(blockKey);
+              }
+            }
+            return {
+              ...block,
+              _autoTranslatedFields: blockFields,
+            };
+          });
+        }
       }
     } else {
       translatedObj[key] = value;

@@ -34,9 +34,16 @@ async function translateFields(
   const fieldsToTrack: string[] = [];
 
   for (const [key, value] of Object.entries(obj)) {
-    // Пропускаем служебные поля
-    if (key.startsWith('_') || key === 'id') {
-      translatedObj[key] = value;
+    // Исключаем служебные поля GraphQL
+    if (key === '_collection' || key === '_template' || key === 'id') {
+      continue;
+    }
+    
+    // Сохраняем только _autoTranslatedFields
+    if (key.startsWith('_')) {
+      if (key === '_autoTranslatedFields') {
+        translatedObj[key] = value;
+      }
       continue;
     }
 

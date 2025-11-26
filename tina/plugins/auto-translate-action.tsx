@@ -1,8 +1,10 @@
 'use client';
 import React, { useState } from 'react';
+import { useCMS } from 'tinacms';
 
 // Компонент Screen для перевода
 const TranslateScreen: React.FC<{ close: () => void }> = ({ close }) => {
+  const cms = useCMS();
   const [status, setStatus] = useState<string>('');
   const [isTranslating, setIsTranslating] = useState(false);
 
@@ -11,9 +13,6 @@ const TranslateScreen: React.FC<{ close: () => void }> = ({ close }) => {
     setStatus('Получение данных...');
 
     try {
-      // Получаем CMS через window
-      const cms = (window as any).tinacms;
-      
       if (!cms) {
         throw new Error('CMS not available');
       }
@@ -29,22 +28,47 @@ const TranslateScreen: React.FC<{ close: () => void }> = ({ close }) => {
         throw new Error('Cannot access current form');
       }
 
-      // @ts-ignore
-      const collection = form.crudType;
-      const supportedCollections = ['page', 'post', 'service'];
+      // Получаем путь из form.id (формат: "content/pages/ru/home.mdx")
+      const formId = form.id || '';
+      console.log('Form ID:', formId);
       
-      if (!collection || !supportedCollections.includes(collection)) {
-        throw new Error('Translation not supported for this collection');
+      // Извлекаем collection и relative path из полного пути
+      // Формат: content/{collection}s/{locale}/{file}.mdx
+      const pathMatch = formId.match(/^content\/(pages|posts|services)\/(.+)$/);
+      
+      if (!pathMatch) {
+        throw new Error(`Cannot parse form ID: "${formId}"`);
+      }
+      
+      const collectionPlural = pathMatch[1]; // "pages", "posts", "services"
+      const relativePath = pathMatch[2]; // "ru/home.mdx"
+      
+      // Преобразуем множественное число в единственное
+      const collectionMap: Record<string, string> = {
+        'pages': 'page',
+        'posts': 'post',
+        'services': 'service'
+      };
+      
+      const collection = collectionMap[collectionPlural];
+      
+      console.log('Collection:', collection);
+      console.log('Relative path:', relativePath);
+      
+      if (!collection) {
+        throw new Error(`Unknown collection: "${collectionPlural}"`);
       }
 
       // Получаем текущие значения формы
       const currentValues = form.finalForm.getState().values;
-      const relativePath = form.id.split(':')[1]; // format: "collection:path"
       
-      // Определяем текущую и целевую локаль
-      const pathParts = relativePath.split('/');
-      const currentLocale = pathParts[0]; // ru или en
+      // Определяем текущую и целевую локаль из relativePath
+      const relativePathParts = relativePath.split('/');
+      const currentLocale = relativePathParts[0]; // ru или en
       const targetLocale = currentLocale === 'ru' ? 'en' : 'ru';
+      
+      console.log('Current locale:', currentLocale);
+      console.log('Target locale:', targetLocale);
 
       setStatus(`Перевод на ${targetLocale === 'en' ? 'английский' : 'русский'}...`);
 
@@ -72,9 +96,18 @@ const TranslateScreen: React.FC<{ close: () => void }> = ({ close }) => {
       setStatus('Создание нового документа...');
 
       // Формируем путь для нового документа
-      const newPathParts = [...pathParts];
+      const newPathParts = [...relativePathParts];
       newPathParts[0] = targetLocale;
       const newRelativePath = newPathParts.join('/');
+      
+      console.log('New relative path:', newRelativePath);
+
+      // Очищаем документ от служебных полей, которые не принимает GraphQL
+      const cleanDocument = { ...translatedDocument };
+      delete cleanDocument._collection;
+      delete cleanDocument._template;
+      
+      console.log('Clean document:', cleanDocument);
 
       // Создаём новый документ через TinaCMS API
       if (!cms.api?.tina) {
@@ -100,7 +133,7 @@ const TranslateScreen: React.FC<{ close: () => void }> = ({ close }) => {
           variables: {
             collection,
             relativePath: newRelativePath,
-            params: translatedDocument,
+            params: cleanDocument,
           },
         }
       );

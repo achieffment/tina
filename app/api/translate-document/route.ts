@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { 
+  shouldTranslateField, 
+  isRichTextNode, 
+  shouldTranslateRichTextNode 
+} from './schema-analyzer';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,6 +12,71 @@ interface TranslateDocumentRequest {
   targetLocale: 'ru' | 'en';
   sourceLocale?: 'ru' | 'en';
   collection: string;
+}
+
+// Функция для перевода rich-text структуры
+async function translateRichText(
+  node: any,
+  apiKey: string,
+  targetLocale: 'ru' | 'en',
+  sourceLocale: 'ru' | 'en'
+): Promise<any> {
+  if (!node || typeof node !== 'object') {
+    return node;
+  }
+
+  // Если это текстовый узел - переводим содержимое
+  if (shouldTranslateRichTextNode(node)) {
+    try {
+      const targetLanguage = targetLocale === 'en' ? 'English' : 'Russian';
+      const sourceLanguage = sourceLocale === 'en' ? 'English' : 'Russian';
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content: `You are a professional translator. Translate the following text from ${sourceLanguage} to ${targetLanguage}. Preserve all formatting, markdown syntax, line breaks, and special characters. Only return the translated text without any explanations or additional content.`,
+            },
+            {
+              role: 'user',
+              content: node.text,
+            },
+          ],
+          temperature: 0.3,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          ...node,
+          text: data.choices[0]?.message?.content || node.text,
+        };
+      }
+    } catch (error) {
+      console.error('Error translating rich-text node:', error);
+    }
+  }
+
+  // Если есть children - рекурсивно обрабатываем
+  if (Array.isArray(node.children)) {
+    return {
+      ...node,
+      children: await Promise.all(
+        node.children.map((child: any) => translateRichText(child, apiKey, targetLocale, sourceLocale))
+      ),
+    };
+  }
+
+  // Возвращаем узел без изменений (type, url, title и т.д. не переводим)
+  return node;
 }
 
 // Рекурсивная функция для перевода всех строковых полей в объекте
@@ -47,50 +117,62 @@ async function translateFields(
       continue;
     }
 
-    // Если это строка, переводим
+    // Если это строка, проверяем нужно ли переводить через schema-analyzer
     if (typeof value === 'string' && value.trim()) {
-      try {
-        const targetLanguage = targetLocale === 'en' ? 'English' : 'Russian';
-        const sourceLanguage = sourceLocale === 'en' ? 'English' : 'Russian';
+      // Проверяем через schema-analyzer
+      if (shouldTranslateField(key, value)) {
+        try {
+          const targetLanguage = targetLocale === 'en' ? 'English' : 'Russian';
+          const sourceLanguage = sourceLocale === 'en' ? 'English' : 'Russian';
 
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: 'gpt-4o-mini',
-            messages: [
-              {
-                role: 'system',
-                content: `You are a professional translator. Translate the following text from ${sourceLanguage} to ${targetLanguage}. Preserve all formatting, markdown syntax, line breaks, and special characters. Only return the translated text without any explanations or additional content.`,
-              },
-              {
-                role: 'user',
-                content: value,
-              },
-            ],
-            temperature: 0.3,
-          }),
-        });
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: 'gpt-4o-mini',
+              messages: [
+                {
+                  role: 'system',
+                  content: `You are a professional translator. Translate the following text from ${sourceLanguage} to ${targetLanguage}. Preserve all formatting, markdown syntax, line breaks, and special characters. Only return the translated text without any explanations or additional content.`,
+                },
+                {
+                  role: 'user',
+                  content: value,
+                },
+              ],
+              temperature: 0.3,
+            }),
+          });
 
-        if (response.ok) {
-          const data = await response.json();
-          translatedObj[key] = data.choices[0]?.message?.content || value;
-          fieldsToTrack.push(key);
-        } else {
+          if (response.ok) {
+            const data = await response.json();
+            translatedObj[key] = data.choices[0]?.message?.content || value;
+            fieldsToTrack.push(key);
+          } else {
+            translatedObj[key] = value;
+          }
+        } catch (error) {
+          console.error(`Error translating field ${key}:`, error);
           translatedObj[key] = value;
         }
-      } catch (error) {
-        console.error(`Error translating field ${key}:`, error);
+      } else {
+        // Не переводим техническое поле
         translatedObj[key] = value;
       }
     }
     // Если это объект или массив, рекурсивно обрабатываем
     else if (typeof value === 'object' && value !== null) {
-      const result = await translateFields(value, apiKey, targetLocale, sourceLocale, []);
-      translatedObj[key] = result.translated;
+      // Проверяем, является ли это rich-text структурой
+      if (isRichTextNode(value)) {
+        // Обрабатываем rich-text специальным образом
+        translatedObj[key] = await translateRichText(value, apiKey, targetLocale, sourceLocale);
+      } else {
+        const result = await translateFields(value, apiKey, targetLocale, sourceLocale, []);
+        translatedObj[key] = result.translated;
+      }
       
       // Для блоков добавляем _autoTranslatedFields
       if (key === 'blocks' && Array.isArray(result.translated)) {

@@ -20,12 +20,21 @@ interface TranslateDocumentRequest {
   collection: string;
 }
 
+// Статистика перевода
+interface TranslationStats {
+  apiCallCount: number;
+  fieldsTranslated: number;
+  totalTokens: number;
+}
+
 // Функция для перевода rich-text структуры
 async function translateRichText(
   node: any,
   apiKey: string,
   targetLocale: LocaleCode,
-  sourceLocale: LocaleCode
+  sourceLocale: LocaleCode,
+  stats: TranslationStats,
+  fieldPath: string = ''
 ): Promise<any> {
   if (!node || typeof node !== 'object') {
     return node;
@@ -33,7 +42,7 @@ async function translateRichText(
 
   // Если это текстовый узел - переводим содержимое
   if (shouldTranslateRichTextNode(node)) {
-    const translatedText = await translateText(node.text, apiKey, targetLocale, sourceLocale);
+    const translatedText = await translateText(node.text, apiKey, targetLocale, sourceLocale, stats, fieldPath + '.text');
     return {
       ...node,
       text: translatedText,
@@ -45,7 +54,9 @@ async function translateRichText(
     return {
       ...node,
       children: await Promise.all(
-        node.children.map((child: any) => translateRichText(child, apiKey, targetLocale, sourceLocale))
+        node.children.map((child: any, index: number) => 
+          translateRichText(child, apiKey, targetLocale, sourceLocale, stats, fieldPath + `.children[${index}]`)
+        )
       ),
     };
   }
@@ -59,12 +70,25 @@ async function translateText(
   text: string,
   apiKey: string,
   targetLocale: LocaleCode,
-  sourceLocale: LocaleCode
+  sourceLocale: LocaleCode,
+  stats: TranslationStats,
+  fieldPath: string = ''
 ): Promise<string> {
   const targetLanguage = LOCALES[targetLocale]?.name || targetLocale;
   const sourceLanguage = LOCALES[sourceLocale]?.name || sourceLocale;
 
+  const systemPrompt = `You are a professional translator. Translate the following text from ${sourceLanguage} to ${targetLanguage}. Preserve all formatting, markdown syntax, line breaks, and special characters. Only return the translated text without any explanations or additional content.`;
+
+  console.log('[TRANSLATE:FIELD]', fieldPath || 'unknown', '- начало перевода');
+  console.log('[TRANSLATE:FIELD] Текст (первые 100 символов):', 
+    text.length > 100 ? text.substring(0, 100) + '...' : text
+  );
+
+  const apiStartTime = Date.now();
+
   try {
+    stats.apiCallCount++;
+    
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -76,7 +100,7 @@ async function translateText(
         messages: [
           {
             role: 'system',
-            content: `You are a professional translator. Translate the following text from ${sourceLanguage} to ${targetLanguage}. Preserve all formatting, markdown syntax, line breaks, and special characters. Only return the translated text without any explanations or additional content.`,
+            content: systemPrompt,
           },
           {
             role: 'user',
@@ -87,12 +111,31 @@ async function translateText(
       }),
     });
 
+    const apiDuration = Date.now() - apiStartTime;
+
     if (response.ok) {
       const data = await response.json();
-      return data.choices[0]?.message?.content || text;
+      const translatedText = data.choices[0]?.message?.content || text;
+      
+      if (data.usage) {
+        stats.totalTokens += data.usage.total_tokens || 0;
+        console.log('[TRANSLATE:API] Вызов #' + stats.apiCallCount, {
+          field: fieldPath,
+          duration: apiDuration + 'ms',
+          tokens: data.usage.total_tokens,
+          prompt_tokens: data.usage.prompt_tokens,
+          completion_tokens: data.usage.completion_tokens,
+        });
+      }
+      
+      console.log('[TRANSLATE:FIELD]', fieldPath || 'unknown', '- перевод завершен за', apiDuration, 'ms');
+      
+      return translatedText;
+    } else {
+      console.error('[TRANSLATE:FIELD] Ошибка API для', fieldPath, '- статус:', response.status);
     }
   } catch (error) {
-    console.error('Error translating text:', error);
+    console.error('[TRANSLATE:FIELD] Ошибка перевода поля', fieldPath, ':', error);
   }
   
   return text;
@@ -105,7 +148,9 @@ async function translateFields(
   apiKey: string,
   targetLocale: LocaleCode,
   sourceLocale: LocaleCode,
-  autoTranslatedFields: string[] = []
+  stats: TranslationStats,
+  autoTranslatedFields: string[] = [],
+  fieldPath: string = ''
 ): Promise<{ translated: any; autoTranslatedFields: string[] }> {
   if (typeof obj !== 'object' || obj === null) {
     return { translated: obj, autoTranslatedFields };
@@ -114,8 +159,17 @@ async function translateFields(
   if (Array.isArray(obj)) {
     // Для массивов обрабатываем каждый элемент
     const translatedArray = [];
-    for (const item of obj) {
-      const result = await translateFields(item, schemaFields, apiKey, targetLocale, sourceLocale, []);
+    for (let i = 0; i < obj.length; i++) {
+      const result = await translateFields(
+        obj[i], 
+        schemaFields, 
+        apiKey, 
+        targetLocale, 
+        sourceLocale, 
+        stats,
+        [], 
+        `${fieldPath}[${i}]`
+      );
       translatedArray.push(result.translated);
     }
     return { translated: translatedArray, autoTranslatedFields };
@@ -125,6 +179,8 @@ async function translateFields(
   const fieldsToTrack: string[] = [];
 
   for (const [key, value] of Object.entries(obj)) {
+    const currentPath = fieldPath ? `${fieldPath}.${key}` : key;
+    
     // Пропускаем служебные поля GraphQL
     if (key === '_collection' || key === 'id') {
       continue;
@@ -152,14 +208,17 @@ async function translateFields(
 
     // Обработка rich-text полей
     if (fieldDef && fieldDef.type === 'rich-text') {
+      console.log('[TRANSLATE:FIELD] Обработка rich-text поля:', currentPath);
       if (isRichTextNode(value)) {
         // Структурированный rich-text узел
-        translatedObj[key] = await translateRichText(value, apiKey, targetLocale, sourceLocale);
+        translatedObj[key] = await translateRichText(value, apiKey, targetLocale, sourceLocale, stats, currentPath);
         fieldsToTrack.push(key);
+        stats.fieldsTranslated++;
       } else if (typeof value === 'string' && value.trim()) {
         // Rich-text как markdown строка
-        translatedObj[key] = await translateText(value, apiKey, targetLocale, sourceLocale);
+        translatedObj[key] = await translateText(value, apiKey, targetLocale, sourceLocale, stats, currentPath);
         fieldsToTrack.push(key);
+        stats.fieldsTranslated++;
       } else {
         translatedObj[key] = value;
       }
@@ -169,8 +228,10 @@ async function translateFields(
     // Обработка строковых полей
     if (typeof value === 'string' && value.trim()) {
       if (shouldTranslateFieldDef(fieldDef)) {
-        translatedObj[key] = await translateText(value, apiKey, targetLocale, sourceLocale);
+        console.log('[TRANSLATE:FIELD] Обработка текстового поля:', currentPath, '(тип:', fieldDef?.type || 'unknown', ')');
+        translatedObj[key] = await translateText(value, apiKey, targetLocale, sourceLocale, stats, currentPath);
         fieldsToTrack.push(key);
+        stats.fieldsTranslated++;
       } else {
         translatedObj[key] = value;
       }
@@ -181,9 +242,12 @@ async function translateFields(
     if (typeof value === 'object' && value !== null) {
       // Если это поле с templates (блоки)
       if (fieldDef && fieldDef.templates && Array.isArray(value)) {
+        console.log('[TRANSLATE:FIELD] Обработка блоков:', currentPath, '(количество блоков:', value.length, ')');
         const translatedBlocks = [];
-        for (const block of value) {
+        for (let i = 0; i < value.length; i++) {
+          const block = value[i];
           if (block && typeof block === 'object' && block._template) {
+            console.log('[TRANSLATE:FIELD] Блок', i + 1, 'шаблон:', block._template);
             // Находим схему шаблона
             const template = findTemplate(fieldDef.templates, block._template);
             if (template) {
@@ -193,7 +257,9 @@ async function translateFields(
                 apiKey,
                 targetLocale,
                 sourceLocale,
-                []
+                stats,
+                [],
+                `${currentPath}[${i}]`
               );
               
               // Добавляем _autoTranslatedFields для блока
@@ -217,14 +283,16 @@ async function translateFields(
         if (Array.isArray(value)) {
           // Массив объектов
           const translatedArray = [];
-          for (const item of value) {
+          for (let i = 0; i < value.length; i++) {
             const result = await translateFields(
-              item,
+              value[i],
               fieldDef.fields,
               apiKey,
               targetLocale,
               sourceLocale,
-              []
+              stats,
+              [],
+              `${currentPath}[${i}]`
             );
             translatedArray.push(result.translated);
           }
@@ -237,7 +305,9 @@ async function translateFields(
             apiKey,
             targetLocale,
             sourceLocale,
-            []
+            stats,
+            [],
+            currentPath
           );
           translatedObj[key] = result.translated;
         }
@@ -246,9 +316,9 @@ async function translateFields(
 
       // Если определение не найдено, но это объект - пробуем обработать как есть
       if (isRichTextNode(value)) {
-        translatedObj[key] = await translateRichText(value, apiKey, targetLocale, sourceLocale);
+        translatedObj[key] = await translateRichText(value, apiKey, targetLocale, sourceLocale, stats, currentPath);
       } else {
-        const result = await translateFields(value, [], apiKey, targetLocale, sourceLocale, []);
+        const result = await translateFields(value, [], apiKey, targetLocale, sourceLocale, stats, [], currentPath);
         translatedObj[key] = result.translated;
       }
       continue;
@@ -265,8 +335,19 @@ async function translateFields(
 }
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  
   try {
     const { document, targetLocale, sourceLocale = 'en', collection }: TranslateDocumentRequest = await request.json();
+
+    console.log('[TRANSLATE] ==========================================');
+    console.log('[TRANSLATE] Начало перевода документа');
+    console.log('[TRANSLATE] Параметры:', {
+      collection,
+      sourceLocale,
+      targetLocale,
+      timestamp: new Date().toISOString(),
+    });
 
     if (!document || !targetLocale || !collection) {
       return NextResponse.json(
@@ -292,20 +373,52 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log('[TRANSLATE] Схема коллекции загружена:', {
+      collection,
+      fieldsCount: collectionSchema.fields.length,
+    });
+
+    // Инициализируем статистику
+    const stats: TranslationStats = {
+      apiCallCount: 0,
+      fieldsTranslated: 0,
+      totalTokens: 0,
+    };
+
+    console.log('[TRANSLATE] Начало обработки полей документа');
+
     // Переводим документ с использованием схемы
     const result = await translateFields(
       document,
       collectionSchema.fields,
       apiKey,
       targetLocale,
-      sourceLocale
+      sourceLocale,
+      stats
     );
+
+    const totalDuration = Date.now() - startTime;
+
+    console.log('[TRANSLATE] ==========================================');
+    console.log('[TRANSLATE] Перевод документа завершен успешно');
+    console.log('[TRANSLATE] Статистика:', {
+      duration: totalDuration + 'ms',
+      fieldsTranslated: stats.fieldsTranslated,
+      apiCalls: stats.apiCallCount,
+      totalTokens: stats.totalTokens,
+      avgTimePerField: stats.fieldsTranslated > 0 
+        ? Math.round(totalDuration / stats.fieldsTranslated) + 'ms' 
+        : 'N/A',
+    });
+    console.log('[TRANSLATE] ==========================================');
 
     return NextResponse.json({
       translatedDocument: result.translated,
     });
   } catch (error) {
-    console.error('Document translation error:', error);
+    const totalDuration = Date.now() - startTime;
+    console.error('[TRANSLATE] Ошибка перевода документа (после', totalDuration, 'ms):', error);
+    console.error('[TRANSLATE] ==========================================');
     return NextResponse.json(
       { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

@@ -87,6 +87,18 @@ const TranslateButton: React.FC = () => {
       return;
     }
 
+    const overallStartTime = Date.now();
+    console.log('='.repeat(60));
+    console.log('[TRANSLATE:UI] 🌐 НАЧАЛО ПРОЦЕССА ПЕРЕВОДА');
+    console.log('[TRANSLATE:UI] Параметры:', {
+      sourceLocale: currentLocale,
+      targetLocales: Array.from(selectedLocales),
+      collection,
+      relativePath,
+      timestamp: new Date().toISOString(),
+    });
+    console.log('='.repeat(60));
+
     setIsTranslating(true);
     setStatus('Получение данных...');
 
@@ -94,6 +106,9 @@ const TranslateButton: React.FC = () => {
       if (!cms) {
         throw new Error('CMS not available');
       }
+
+      const stepStartTime = Date.now();
+      console.log('[TRANSLATE:UI] Шаг 1: Получение данных формы');
 
       // Получаем активную форму
       const activeForms = cms.state.forms || [];
@@ -112,18 +127,32 @@ const TranslateButton: React.FC = () => {
       const relativePathParts = relativePath.split('/');
       const filePathWithoutLocale = relativePathParts.slice(1).join('/');
       
-      console.log('Current locale:', currentLocale);
-      console.log('Selected locales:', Array.from(selectedLocales));
+      console.log('[TRANSLATE:UI] Данные получены за', Date.now() - stepStartTime, 'ms');
+      console.log('[TRANSLATE:UI] Структура документа:', {
+        fields: Object.keys(currentValues),
+        collection,
+      });
 
       const createdFiles: string[] = [];
       const failedLocales: string[] = [];
 
       // Переводим на каждый выбранный язык
+      let localeIndex = 0;
       for (const targetLocale of selectedLocales) {
+        localeIndex++;
+        const localeStartTime = Date.now();
+        
+        console.log('\n' + '-'.repeat(60));
+        console.log(`[TRANSLATE:UI] Язык ${localeIndex}/${selectedLocales.size}: ${LOCALES[targetLocale].nativeName} (${targetLocale})`);
+        console.log('-'.repeat(60));
+        
         try {
-          setStatus(`Перевод на ${LOCALES[targetLocale].nativeName}...`);
+          setStatus(`Перевод на ${LOCALES[targetLocale].nativeName}... (${localeIndex}/${selectedLocales.size})`);
 
-          // Вызываем API для перевода документа
+          // Шаг 1: Перевод документа
+          const translateStartTime = Date.now();
+          console.log('[TRANSLATE:UI] Шаг 1: Отправка документа на перевод');
+          
           const response = await fetch('/api/translate-document', {
             method: 'POST',
             headers: {
@@ -139,19 +168,26 @@ const TranslateButton: React.FC = () => {
 
           if (!response.ok) {
             const error = await response.json();
+            console.error('[TRANSLATE:UI] Ошибка API перевода:', error);
             throw new Error(error.error || 'Translation failed');
           }
 
           const { translatedDocument } = await response.json();
+          const translateDuration = Date.now() - translateStartTime;
+          
+          console.log('[TRANSLATE:UI] ✓ Перевод завершен за', translateDuration, 'ms');
+          console.log('[TRANSLATE:UI] Переведенные поля:', Object.keys(translatedDocument));
 
+          // Шаг 2: Создание файла
           setStatus(`Создание документа (${LOCALES[targetLocale].nativeName})...`);
 
-          // Формируем путь для нового документа
           const newRelativePath = `${targetLocale}/${filePathWithoutLocale}`;
           
-          console.log('New relative path:', newRelativePath);
+          console.log('[TRANSLATE:UI] Шаг 2: Создание файла');
+          console.log('[TRANSLATE:UI] Путь:', newRelativePath);
 
-          // Создаём файл напрямую через наш API endpoint
+          const createFileStartTime = Date.now();
+
           const createFileResponse = await fetch('/api/create-translated-file', {
             method: 'POST',
             headers: {
@@ -166,18 +202,47 @@ const TranslateButton: React.FC = () => {
 
           if (!createFileResponse.ok) {
             const error = await createFileResponse.json();
+            console.error('[TRANSLATE:UI] Ошибка создания файла:', error);
             throw new Error(error.error || 'Failed to create file');
           }
 
           const { path: createdFilePath } = await createFileResponse.json();
-          console.log('Created file:', createdFilePath);
+          const createFileDuration = Date.now() - createFileStartTime;
+          
+          const localeDuration = Date.now() - localeStartTime;
+          
+          console.log('[TRANSLATE:UI] ✓ Файл создан за', createFileDuration, 'ms');
+          console.log('[TRANSLATE:UI] ✓ Путь:', createdFilePath);
+          console.log('[TRANSLATE:UI] ✅ Язык обработан успешно за', localeDuration, 'ms');
+          
           createdFiles.push(targetLocale);
           
         } catch (error) {
-          console.error(`Translation error for ${targetLocale}:`, error);
+          const localeDuration = Date.now() - localeStartTime;
+          console.error('[TRANSLATE:UI] ❌ Ошибка перевода на', targetLocale, 'после', localeDuration, 'ms:', error);
           failedLocales.push(targetLocale);
         }
       }
+      
+      const overallDuration = Date.now() - overallStartTime;
+      
+      console.log('\n' + '='.repeat(60));
+      console.log('[TRANSLATE:UI] 🏁 ПЕРЕВОД ЗАВЕРШЕН');
+      console.log('[TRANSLATE:UI] Общая статистика:', {
+        totalDuration: overallDuration + 'ms',
+        successCount: createdFiles.length,
+        failedCount: failedLocales.length,
+        totalLocales: selectedLocales.size,
+        avgTimePerLocale: Math.round(overallDuration / selectedLocales.size) + 'ms',
+      });
+      
+      if (createdFiles.length > 0) {
+        console.log('[TRANSLATE:UI] ✅ Успешно:', createdFiles.map(loc => LOCALES[loc as LocaleCode].nativeName).join(', '));
+      }
+      if (failedLocales.length > 0) {
+        console.log('[TRANSLATE:UI] ❌ Ошибки:', failedLocales.map(loc => LOCALES[loc as LocaleCode].nativeName).join(', '));
+      }
+      console.log('='.repeat(60));
       
       // Формируем итоговое сообщение
       let finalStatus = '';
@@ -214,7 +279,11 @@ const TranslateButton: React.FC = () => {
       }, 1000);
       
     } catch (error) {
-      console.error('Translation error:', error);
+      const overallDuration = Date.now() - overallStartTime;
+      console.error('='.repeat(60));
+      console.error('[TRANSLATE:UI] ❌ КРИТИЧЕСКАЯ ОШИБКА после', overallDuration, 'ms');
+      console.error('[TRANSLATE:UI] Ошибка:', error);
+      console.error('='.repeat(60));
       setStatus(`❌ Ошибка: ${error instanceof Error ? error.message : 'Translation failed'}`);
       setIsTranslating(false);
     }

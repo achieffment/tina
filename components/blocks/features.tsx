@@ -11,6 +11,7 @@ import { iconSchema } from "../../tina/fields/icon";
 import { Card, CardContent, CardHeader } from "../ui/card";
 import { Section } from "../layout/section";
 import { sectionBlockSchemaField } from '../layout/section';
+import { translatableString } from '@/tina/fields/translatable';
 
 export const Features = ({ data }: { data: PageBlocksFeatures }) => {
   return (
@@ -93,16 +94,14 @@ export const featureBlockSchema: Template = {
   },
   fields: [
     sectionBlockSchemaField as any,
-    {
-      type: "string",
+    translatableString({
       label: "Title",
       name: "title",
-    },
-    {
-      type: "string",
+    }),
+    translatableString({
       label: "Description",
       name: "description",
-    },
+    }),
     {
       type: "object",
       label: "Feature Items",
@@ -120,11 +119,10 @@ export const featureBlockSchema: Template = {
       },
       fields: [
         iconSchema as any,
-        {
-          type: "string",
+        translatableString({
           label: "Title",
           name: "title",
-        },
+        }),
         {
           type: "rich-text",
           label: "Text",

@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { 
-  shouldTranslateField, 
+  getCollectionSchema,
+  shouldTranslateFieldDef,
+  findFieldDef,
+  findTemplate,
   isRichTextNode, 
-  shouldTranslateRichTextNode 
+  shouldTranslateRichTextNode,
+  type TinaField,
+  type TinaTemplate
 } from './schema-analyzer';
 
 export const dynamic = 'force-dynamic';
@@ -27,42 +32,11 @@ async function translateRichText(
 
   // Если это текстовый узел - переводим содержимое
   if (shouldTranslateRichTextNode(node)) {
-    try {
-      const targetLanguage = targetLocale === 'en' ? 'English' : 'Russian';
-      const sourceLanguage = sourceLocale === 'en' ? 'English' : 'Russian';
-
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'system',
-              content: `You are a professional translator. Translate the following text from ${sourceLanguage} to ${targetLanguage}. Preserve all formatting, markdown syntax, line breaks, and special characters. Only return the translated text without any explanations or additional content.`,
-            },
-            {
-              role: 'user',
-              content: node.text,
-            },
-          ],
-          temperature: 0.3,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        return {
-          ...node,
-          text: data.choices[0]?.message?.content || node.text,
-        };
-      }
-    } catch (error) {
-      console.error('Error translating rich-text node:', error);
-    }
+    const translatedText = await translateText(node.text, apiKey, targetLocale, sourceLocale);
+    return {
+      ...node,
+      text: translatedText,
+    };
   }
 
   // Если есть children - рекурсивно обрабатываем
@@ -79,9 +53,54 @@ async function translateRichText(
   return node;
 }
 
-// Рекурсивная функция для перевода всех строковых полей в объекте
+// Вспомогательная функция для перевода текста через OpenAI
+async function translateText(
+  text: string,
+  apiKey: string,
+  targetLocale: 'ru' | 'en',
+  sourceLocale: 'ru' | 'en'
+): Promise<string> {
+  const targetLanguage = targetLocale === 'en' ? 'English' : 'Russian';
+  const sourceLanguage = sourceLocale === 'en' ? 'English' : 'Russian';
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `You are a professional translator. Translate the following text from ${sourceLanguage} to ${targetLanguage}. Preserve all formatting, markdown syntax, line breaks, and special characters. Only return the translated text without any explanations or additional content.`,
+          },
+          {
+            role: 'user',
+            content: text,
+          },
+        ],
+        temperature: 0.3,
+      }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return data.choices[0]?.message?.content || text;
+    }
+  } catch (error) {
+    console.error('Error translating text:', error);
+  }
+  
+  return text;
+}
+
+// Рекурсивная функция для перевода полей на основе схемы
 async function translateFields(
   obj: any,
+  schemaFields: TinaField[],
   apiKey: string,
   targetLocale: 'ru' | 'en',
   sourceLocale: 'ru' | 'en',
@@ -92,9 +111,10 @@ async function translateFields(
   }
 
   if (Array.isArray(obj)) {
+    // Для массивов обрабатываем каждый элемент
     const translatedArray = [];
     for (const item of obj) {
-      const result = await translateFields(item, apiKey, targetLocale, sourceLocale, []);
+      const result = await translateFields(item, schemaFields, apiKey, targetLocale, sourceLocale, []);
       translatedArray.push(result.translated);
     }
     return { translated: translatedArray, autoTranslatedFields };
@@ -104,98 +124,137 @@ async function translateFields(
   const fieldsToTrack: string[] = [];
 
   for (const [key, value] of Object.entries(obj)) {
-    // Исключаем служебные поля GraphQL
-    if (key === '_collection' || key === '_template' || key === 'id') {
+    // Пропускаем служебные поля GraphQL
+    if (key === '_collection' || key === 'id') {
+      continue;
+    }
+
+    // Сохраняем _template (нужен для определения схемы блоков)
+    if (key === '_template') {
+      translatedObj[key] = value;
       continue;
     }
     
-    // Сохраняем только _autoTranslatedFields
-    if (key.startsWith('_')) {
-      if (key === '_autoTranslatedFields') {
+    // Сохраняем _autoTranslatedFields
+    if (key === '_autoTranslatedFields') {
+      translatedObj[key] = value;
+      continue;
+    }
+
+    // Пропускаем другие служебные поля
+    if (key.startsWith('_') && key !== '_body') {
+      continue;
+    }
+
+    // Находим определение поля в схеме
+    const fieldDef = findFieldDef(schemaFields, key);
+
+    // Обработка rich-text полей
+    if (fieldDef && fieldDef.type === 'rich-text') {
+      if (isRichTextNode(value)) {
+        // Структурированный rich-text узел
+        translatedObj[key] = await translateRichText(value, apiKey, targetLocale, sourceLocale);
+        fieldsToTrack.push(key);
+      } else if (typeof value === 'string' && value.trim()) {
+        // Rich-text как markdown строка
+        translatedObj[key] = await translateText(value, apiKey, targetLocale, sourceLocale);
+        fieldsToTrack.push(key);
+      } else {
         translatedObj[key] = value;
       }
       continue;
     }
 
-    // Если это строка, проверяем нужно ли переводить через schema-analyzer
+    // Обработка строковых полей
     if (typeof value === 'string' && value.trim()) {
-      // Проверяем через schema-analyzer
-      if (shouldTranslateField(key, value)) {
-        try {
-          const targetLanguage = targetLocale === 'en' ? 'English' : 'Russian';
-          const sourceLanguage = sourceLocale === 'en' ? 'English' : 'Russian';
-
-          const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model: 'gpt-4o-mini',
-              messages: [
-                {
-                  role: 'system',
-                  content: `You are a professional translator. Translate the following text from ${sourceLanguage} to ${targetLanguage}. Preserve all formatting, markdown syntax, line breaks, and special characters. Only return the translated text without any explanations or additional content.`,
-                },
-                {
-                  role: 'user',
-                  content: value,
-                },
-              ],
-              temperature: 0.3,
-            }),
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            translatedObj[key] = data.choices[0]?.message?.content || value;
-            fieldsToTrack.push(key);
-          } else {
-            translatedObj[key] = value;
-          }
-        } catch (error) {
-          console.error(`Error translating field ${key}:`, error);
-          translatedObj[key] = value;
-        }
+      if (shouldTranslateFieldDef(fieldDef)) {
+        translatedObj[key] = await translateText(value, apiKey, targetLocale, sourceLocale);
+        fieldsToTrack.push(key);
       } else {
-        // Не переводим техническое поле
         translatedObj[key] = value;
       }
+      continue;
     }
-    // Если это объект или массив, рекурсивно обрабатываем
-    else if (typeof value === 'object' && value !== null) {
-      // Проверяем, является ли это rich-text структурой
+
+    // Обработка объектов и массивов
+    if (typeof value === 'object' && value !== null) {
+      // Если это поле с templates (блоки)
+      if (fieldDef && fieldDef.templates && Array.isArray(value)) {
+        const translatedBlocks = [];
+        for (const block of value) {
+          if (block && typeof block === 'object' && block._template) {
+            // Находим схему шаблона
+            const template = findTemplate(fieldDef.templates, block._template);
+            if (template) {
+              const result = await translateFields(
+                block,
+                template.fields,
+                apiKey,
+                targetLocale,
+                sourceLocale,
+                []
+              );
+              
+              // Добавляем _autoTranslatedFields для блока
+              translatedBlocks.push({
+                ...result.translated,
+                _autoTranslatedFields: result.autoTranslatedFields,
+              });
+            } else {
+              translatedBlocks.push(block);
+            }
+          } else {
+            translatedBlocks.push(block);
+          }
+        }
+        translatedObj[key] = translatedBlocks;
+        continue;
+      }
+
+      // Если это объект с вложенными полями
+      if (fieldDef && fieldDef.fields) {
+        if (Array.isArray(value)) {
+          // Массив объектов
+          const translatedArray = [];
+          for (const item of value) {
+            const result = await translateFields(
+              item,
+              fieldDef.fields,
+              apiKey,
+              targetLocale,
+              sourceLocale,
+              []
+            );
+            translatedArray.push(result.translated);
+          }
+          translatedObj[key] = translatedArray;
+        } else {
+          // Одиночный объект
+          const result = await translateFields(
+            value,
+            fieldDef.fields,
+            apiKey,
+            targetLocale,
+            sourceLocale,
+            []
+          );
+          translatedObj[key] = result.translated;
+        }
+        continue;
+      }
+
+      // Если определение не найдено, но это объект - пробуем обработать как есть
       if (isRichTextNode(value)) {
-        // Обрабатываем rich-text специальным образом
         translatedObj[key] = await translateRichText(value, apiKey, targetLocale, sourceLocale);
       } else {
-        const result = await translateFields(value, apiKey, targetLocale, sourceLocale, []);
+        const result = await translateFields(value, [], apiKey, targetLocale, sourceLocale, []);
         translatedObj[key] = result.translated;
-        
-        // Для блоков добавляем _autoTranslatedFields
-        if (key === 'blocks' && Array.isArray(result.translated)) {
-          translatedObj[key] = result.translated.map((block: any) => {
-            if (block._autoTranslatedFields && block._autoTranslatedFields.length > 0) {
-              return block;
-            }
-            // Определяем переведённые поля в блоке
-            const blockFields: string[] = [];
-            for (const blockKey of Object.keys(block)) {
-              if (typeof block[blockKey] === 'string' && !blockKey.startsWith('_')) {
-                blockFields.push(blockKey);
-              }
-            }
-            return {
-              ...block,
-              _autoTranslatedFields: blockFields,
-            };
-          });
-        }
       }
-    } else {
-      translatedObj[key] = value;
+      continue;
     }
+
+    // Остальные типы (number, boolean, null) копируем как есть
+    translatedObj[key] = value;
   }
 
   return {
@@ -223,8 +282,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Переводим документ
-    const result = await translateFields(document, apiKey, targetLocale, sourceLocale);
+    // Получаем схему коллекции
+    const collectionSchema = getCollectionSchema(collection);
+    if (!collectionSchema) {
+      return NextResponse.json(
+        { error: `Collection schema not found: ${collection}` },
+        { status: 400 }
+      );
+    }
+
+    // Переводим документ с использованием схемы
+    const result = await translateFields(
+      document,
+      collectionSchema.fields,
+      apiKey,
+      targetLocale,
+      sourceLocale
+    );
 
     return NextResponse.json({
       translatedDocument: result.translated,

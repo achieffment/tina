@@ -5,6 +5,7 @@ import { Section } from "../layout/section";
 import { sectionBlockSchemaField } from '../layout/section';
 import Image from 'next/image';
 import { Button } from "../ui/button";
+import { translatableString } from '@/tina/fields/translatable';
 import Link from "next/link";
 
 export const RawHero = ({ data }: { data: PageBlocksRawHero }) => {
@@ -80,33 +81,29 @@ export const rawHeroBlockSchema: Template = {
                     label: "Image Source",
                     type: "image",
                 },
-                {
+                translatableString({
                     name: "alt",
                     label: "Alt Text",
-                    type: "string",
-                }
+                })
             ],
         },
-        {
-            type: "string",
+        translatableString({
             label: "Title",
             name: "title",
-        },
-        {
-            type: "string",
+        }),
+        translatableString({
             label: "Text",
             name: "text",
-        },
+        }),
         {
             type: "object",
             label: "Actions",
             name: "buttons",
             fields: [
-                {
-                    type: "string",
+                translatableString({
                     label: "Label",
                     name: "label",
-                },
+                }),
                 {
                     type: "string",
                     label: "Link",

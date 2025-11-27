@@ -4,6 +4,7 @@ import { PageBlocksRawFree } from "@/tina/__generated__/types";
 import { Section } from "../layout/section";
 import { sectionBlockSchemaField } from '../layout/section';
 import Image from 'next/image';
+import { translatableString } from '@/tina/fields/translatable';
 
 export const RawFree = ({ data }: { data: PageBlocksRawFree }) => {
     return (
@@ -62,16 +63,14 @@ export const rawFreeBlockSchema: Template = {
     },
     fields: [
         sectionBlockSchemaField as any,
-        {
-            type: "string",
+        translatableString({
             label: "Suptitle",
             name: "suptitle",
-        },
-        {
-            type: "string",
+        }),
+        translatableString({
             label: "Title",
             name: "title",
-        },
+        }),
         {
             type: "object",
             label: "Images",
@@ -82,11 +81,10 @@ export const rawFreeBlockSchema: Template = {
                     label: "Image Source",
                     type: "image",
                 },
-                {
+                translatableString({
                     name: "alt",
                     label: "Alt Text",
-                    type: "string",
-                }
+                })
             ],
             list: true,
         },

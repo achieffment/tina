@@ -3,6 +3,7 @@ import { videoBlockSchema } from '@/components/blocks/video';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { Collection } from 'tinacms';
 import { wrapStringFields } from '@/tina/plugins/auto-translation-indicator';
+import { translatableString } from '@/tina/fields/translatable';
 
 const Post: Collection = {
   label: 'Blog Posts',
@@ -23,13 +24,12 @@ const Post: Collection = {
     },
   },
   fields: wrapStringFields([
-    {
-      type: 'string',
+    translatableString({
       label: 'Title',
       name: 'title',
       isTitle: true,
       required: true,
-    },
+    }),
     {
       type: 'image',
       name: 'heroImg',
@@ -161,16 +161,14 @@ const Post: Collection = {
               label: 'CTA',
               type: 'rich-text',
             },
-            {
+            translatableString({
               name: 'placeholder',
               label: 'Placeholder',
-              type: 'string',
-            },
-            {
+            }),
+            translatableString({
               name: 'buttonText',
               label: 'Button Text',
-              type: 'string',
-            },
+            }),
             {
               name: 'disclaimer',
               label: 'Disclaimer',

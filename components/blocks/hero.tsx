@@ -1,5 +1,6 @@
 'use client';
 import { iconSchema } from '@/tina/fields/icon';
+import { translatableString } from '@/tina/fields/translatable';
 import Image from 'next/image';
 import Link from 'next/link';
 import * as React from 'react';
@@ -109,16 +110,14 @@ export const heroBlockSchema: Template = {
   },
   fields: [
     sectionBlockSchemaField as any,
-    {
-      type: 'string',
+    translatableString({
       label: 'Headline',
       name: 'headline',
-    },
-    {
-      type: 'string',
+    }),
+    translatableString({
       label: 'Tagline',
       name: 'tagline',
-    },
+    }),
     {
       label: 'Actions',
       name: 'actions',
@@ -138,11 +137,10 @@ export const heroBlockSchema: Template = {
         itemProps: (item) => ({ label: item.label }),
       },
       fields: [
-        {
+        translatableString({
           label: 'Label',
           name: 'label',
-          type: 'string',
-        },
+        }),
         {
           label: 'Type',
           name: 'type',
@@ -170,11 +168,10 @@ export const heroBlockSchema: Template = {
           label: 'Image Source',
           type: 'image',
         },
-        {
+        translatableString({
           name: 'alt',
           label: 'Alt Text',
-          type: 'string',
-        },
+        }),
         {
           name: 'videoUrl',
           label: 'Video URL',

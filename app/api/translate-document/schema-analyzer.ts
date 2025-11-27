@@ -1,112 +1,84 @@
 /**
  * Schema Analyzer для определения переводимых полей в TinaCMS
+ * Использует сгенерированную схему для определения типов полей
  */
 
-// Технические поля - НИКОГДА не переводить
-const TECHNICAL_FIELDS = new Set([
-  'type',
-  'name',
-  'icon',
-  'color',
-  'style',
-  'link',
-  'url',
-  'background',
-  'videoUrl',
-  'src',
-  'alt',
-  '_template',
-  '_collection',
-  '_autoTranslatedFields',
-  'id',
-]);
+import tinaSchema from '@/tina/__generated__/_schema.json';
 
-// Контентные поля - ВСЕГДА переводить
-const CONTENT_FIELDS = new Set([
-  'title',
-  'description',
-  'headline',
-  'tagline',
-  'text',
-  'quote',
-  'author',
-  'role',
-  'label',
-  'body',
-  'content',
-  'stat',
-]);
+// Типы полей TinaCMS
+interface TinaField {
+  type: string;
+  name: string;
+  label?: string;
+  options?: any[];
+  fields?: TinaField[];
+  templates?: TinaTemplate[];
+  list?: boolean;
+  isBody?: boolean;
+  translatable?: boolean;
+}
 
-// Типы полей, которые не переводятся
-const NON_TRANSLATABLE_TYPES = new Set([
-  'image',
-  'reference',
-  'boolean',
-  'number',
-  'date',
-]);
+interface TinaTemplate {
+  name: string;
+  label?: string;
+  fields: TinaField[];
+}
 
-/**
- * Проверяет, является ли поле техническим (не должно переводиться)
- */
-export function isTechnicalField(fieldName: string): boolean {
-  return TECHNICAL_FIELDS.has(fieldName);
+interface TinaCollection {
+  name: string;
+  label: string;
+  fields: TinaField[];
 }
 
 /**
- * Проверяет, является ли поле контентным (должно переводиться)
+ * Получает схему коллекции по имени
  */
-export function isContentField(fieldName: string): boolean {
-  return CONTENT_FIELDS.has(fieldName);
+export function getCollectionSchema(collectionName: string): TinaCollection | null {
+  const collection = tinaSchema.collections.find(
+    (col: any) => col.name === collectionName
+  );
+  return collection || null;
 }
 
 /**
- * Проверяет, нужно ли переводить строковое поле
- * @param fieldName - имя поля
- * @param value - значение поля
+ * Проверяет, нужно ли переводить поле на основе его определения в схеме
+ * OPT-IN стратегия: переводим ТОЛЬКО явно помеченные поля
+ * @param fieldDef - определение поля из схемы TinaCMS
  * @returns true если поле нужно переводить
  */
-export function shouldTranslateField(fieldName: string, value: any): boolean {
-  // Пропускаем служебные поля
-  if (fieldName.startsWith('_')) {
-    return fieldName === '_body'; // Только _body может переводиться
-  }
-
-  // Технические поля не переводим
-  if (isTechnicalField(fieldName)) {
+export function shouldTranslateFieldDef(fieldDef: TinaField | undefined): boolean {
+  if (!fieldDef) {
+    // Без схемы НЕ переводим
     return false;
   }
 
-  // Контентные поля переводим
-  if (isContentField(fieldName)) {
+  // OPT-IN: переводим ТОЛЬКО с явным флагом translatable
+  if (fieldDef.translatable === true) {
     return true;
   }
 
-  // Если значение похоже на URL или путь - не переводим
-  if (typeof value === 'string') {
-    // Проверяем URL
-    if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('//')) {
-      return false;
-    }
-    
-    // Проверяем путь
-    if (value.startsWith('/') || value.includes('./') || value.includes('../')) {
-      return false;
-    }
-
-    // Проверяем Tailwind классы
-    if (value.startsWith('bg-') || value.includes('text-') || value.includes('hover:')) {
-      return false;
-    }
-
-    // Проверяем пустые строки
-    if (!value.trim()) {
-      return false;
-    }
+  // Rich-text переводим всегда (содержимое текстовых узлов)
+  if (fieldDef.type === 'rich-text') {
+    return true;
   }
 
-  // По умолчанию переводим строковые значения
-  return typeof value === 'string' && value.trim().length > 0;
+  // Всё остальное НЕ переводим
+  return false;
+}
+
+
+/**
+ * Находит определение поля в схеме по имени
+ */
+export function findFieldDef(fields: TinaField[], fieldName: string): TinaField | undefined {
+  return fields.find((f) => f.name === fieldName);
+}
+
+/**
+ * Находит шаблон в списке templates по имени
+ */
+export function findTemplate(templates: TinaTemplate[], templateName: string): TinaTemplate | undefined {
+  return templates.find((t) => t.name === templateName);
 }
 
 /**
@@ -117,7 +89,7 @@ export function isRichTextNode(obj: any): boolean {
     obj &&
     typeof obj === 'object' &&
     'type' in obj &&
-    (obj.type === 'root' || obj.type === 'p' || obj.type === 'text' || obj.type === 'a')
+    (obj.type === 'root' || obj.type === 'p' || obj.type === 'text' || obj.type === 'a' || obj.type === 'h1' || obj.type === 'h2' || obj.type === 'h3')
   );
 }
 
@@ -128,4 +100,9 @@ export function shouldTranslateRichTextNode(node: any): boolean {
   // Переводим только текстовые узлы с непустым содержимым
   return node.type === 'text' && node.text && typeof node.text === 'string' && node.text.trim().length > 0;
 }
+
+/**
+ * Экспортируем типы для использования в других модулях
+ */
+export type { TinaField, TinaTemplate, TinaCollection };
 

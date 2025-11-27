@@ -32,6 +32,8 @@ interface CollectedText {
   path: string;
   text: string;
   index: number;
+  isRichText?: boolean; // Флаг, что это rich-text поле, нужно конвертировать в Markdown
+  richTextData?: any;   // Исходная rich-text структура для отправки в GPT
 }
 
 // Функция для генерации JSON Schema для Structured Outputs
@@ -89,8 +91,14 @@ function collectTextsForTranslation(
     // Обработка rich-text полей
     if (fieldDef && fieldDef.type === 'rich-text') {
       if (isRichTextNode(value)) {
-        // Собираем тексты из rich-text узлов
-        collectRichTextNodes(value, collected, currentPath);
+        // Сохраняем весь rich-text объект для конвертации GPT
+        collected.push({
+          path: currentPath,
+          text: JSON.stringify(value), // Сериализуем для отправки в GPT
+          index: collected.length,
+          isRichText: true,
+          richTextData: value
+        });
       } else if (typeof value === 'string' && value.trim()) {
         collected.push({
           path: currentPath,
@@ -143,7 +151,13 @@ function collectTextsForTranslation(
 
       // Если определение не найдено, но это rich-text узел
       if (isRichTextNode(value)) {
-        collectRichTextNodes(value, collected, currentPath);
+        collected.push({
+          path: currentPath,
+          text: JSON.stringify(value),
+          index: collected.length,
+          isRichText: true,
+          richTextData: value
+        });
       } else {
         collectTextsForTranslation(value, [], collected, currentPath);
       }
@@ -153,32 +167,7 @@ function collectTextsForTranslation(
   return collected;
 }
 
-// Вспомогательная функция для сбора текстов из rich-text узлов
-function collectRichTextNodes(
-  node: any,
-  collected: CollectedText[],
-  fieldPath: string
-): void {
-  if (!node || typeof node !== 'object') {
-    return;
-  }
-
-  // Если это текстовый узел с переводимым текстом
-  if (shouldTranslateRichTextNode(node) && node.text && node.text.trim()) {
-    collected.push({
-      path: `${fieldPath}.text`,
-      text: node.text,
-      index: collected.length
-    });
-  }
-
-  // Рекурсивно обрабатываем children
-  if (Array.isArray(node.children)) {
-    node.children.forEach((child: any, index: number) => {
-      collectRichTextNodes(child, collected, `${fieldPath}.children[${index}]`);
-    });
-  }
-}
+// Функция collectRichTextNodes больше не нужна - мы отправляем весь rich-text объект в GPT
 
 // Функция для батч-перевода всех текстов одним запросом
 async function batchTranslateTexts(
@@ -204,12 +193,55 @@ async function batchTranslateTexts(
   const estimatedTokens = Math.ceil(totalChars / 4);
   console.log('[TRANSLATE:BATCH] Примерное количество токенов:', estimatedTokens);
 
-  // Упрощенный системный промпт - схема сама обеспечивает структуру
-  const systemPrompt = `You are a professional translator. Translate each value in the JSON object from ${sourceLanguage} to ${targetLanguage}. Preserve all formatting, markdown syntax, line breaks, and special characters.`;
+  // Улучшенный системный промпт для обработки rich-text и обычных строк
+  const systemPrompt = `You are a professional translator from ${sourceLanguage} to ${targetLanguage}.
+
+You will receive a JSON object where values can be:
+1. Regular text strings - translate them preserving markdown syntax
+2. TinaCMS rich-text JSON structures - convert them to Markdown AND translate
+
+TinaCMS rich-text structure guide:
+- type: "root" - document root, has children
+- type: "h1", "h2", "h3", "h4", "h5", "h6" - headers → convert to # ## ### #### ##### ######
+- type: "p" - paragraph → add \\n\\n after
+- type: "ul" - unordered list (children are list items)
+- type: "ol" - ordered list (children are numbered items)
+- type: "li" - list item → prefix with * (for ul) or number. (for ol)
+- type: "lic" - list item content (child of li)
+- type: "blockquote" - quote → prefix lines with >
+- type: "code_block" - code block → wrap in \`\`\`
+- type: "code" - inline code → wrap in \`
+- type: "a" with url property - link → convert to [translated_text](url)
+- type: "text" - plain text node, has text property
+- type: "mdxJsxTextElement" or similar - MDX components → keep unchanged, don't translate attributes
+- bold: true - wrap text in **
+- italic: true - wrap text in *
+
+CRITICAL RULES:
+1. For rich-text JSON: Convert to clean Markdown string with proper \\n\\n spacing
+2. For regular strings: Keep all markdown syntax and \\n exactly as is
+3. Translate ONLY human-readable text content
+4. Keep ALL URLs, code snippets, component names unchanged
+5. MDX components like <scriptCopyBlock> - keep structure, don't translate attributes
+
+Example rich-text input:
+{"type":"root","children":[{"type":"h1","children":[{"type":"text","text":"Hello"}]},{"type":"p","children":[{"type":"text","text":"World"}]}]}
+
+Example output:
+"# Привет\\n\\nМир"`;
+
 
   console.log('[TRANSLATE:BATCH] Системный промпт:', systemPrompt);
   console.log('[TRANSLATE:BATCH] Использование: Structured Outputs (JSON Schema)');
   console.log('[TRANSLATE:BATCH] Схема:', texts.length, 'полей с strict mode');
+  
+  // Логируем первый текст для отладки форматирования
+  if (texts.length > 0) {
+    console.log('[TRANSLATE:BATCH] Пример входного текста (индекс 0):');
+    console.log('[TRANSLATE:BATCH] Длина:', texts[0].text.length, 'символов');
+    console.log('[TRANSLATE:BATCH] Содержит \\n:', texts[0].text.includes('\n'));
+    console.log('[TRANSLATE:BATCH] Первые 200 символов:', texts[0].text.substring(0, 200));
+  }
   
   // Генерируем JSON Schema для Structured Outputs
   const translationSchema = generateTranslationSchema(texts.length);
@@ -224,7 +256,7 @@ async function batchTranslateTexts(
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4o',
         messages: [
           {
             role: 'system',
@@ -232,7 +264,7 @@ async function batchTranslateTexts(
           },
           {
             role: 'user',
-            content: JSON.stringify(textsToTranslate, null, 2),
+            content: `Translate this JSON. For values that are JSON strings containing rich-text objects, parse them, convert to Markdown, and translate. For regular text values, translate preserving all formatting.\n\n${JSON.stringify(textsToTranslate, null, 2)}`,
           },
         ],
         temperature: 0.3,
@@ -270,6 +302,14 @@ async function batchTranslateTexts(
 
     // Парсим JSON ответ - Structured Outputs гарантирует корректный JSON
     const translatedTexts: Record<string, string> = JSON.parse(translatedContent);
+
+    // Логируем первый переведенный текст для отладки
+    if (texts.length > 0 && translatedTexts['0']) {
+      console.log('[TRANSLATE:BATCH] Пример переведенного текста (индекс 0):');
+      console.log('[TRANSLATE:BATCH] Длина:', translatedTexts['0'].length, 'символов');
+      console.log('[TRANSLATE:BATCH] Содержит \\n:', translatedTexts['0'].includes('\n'));
+      console.log('[TRANSLATE:BATCH] Первые 200 символов:', translatedTexts['0'].substring(0, 200));
+    }
 
     // Создаем карту переводов по путям
     // Structured Outputs гарантирует наличие всех ключей, проверка на undefined не нужна
@@ -350,9 +390,12 @@ function applyTranslations(
     // Обработка rich-text полей
     if (fieldDef && fieldDef.type === 'rich-text') {
       if (isRichTextNode(value)) {
-        // Применяем переводы к rich-text узлам
-        translatedObj[key] = applyTranslationsToRichText(value, translations, currentPath);
-        fieldsToTrack.push(key);
+        // GPT вернул готовый Markdown, заменяем rich-text объект на строку
+        const translated = translations.get(currentPath);
+        translatedObj[key] = translated || value;
+        if (translated) {
+          fieldsToTrack.push(key);
+        }
       } else if (typeof value === 'string' && value.trim()) {
         // Применяем перевод к markdown строке
         const translated = translations.get(currentPath);
@@ -442,7 +485,8 @@ function applyTranslations(
 
       // Если определение не найдено, но это rich-text узел
       if (isRichTextNode(value)) {
-        translatedObj[key] = applyTranslationsToRichText(value, translations, currentPath);
+        const translated = translations.get(currentPath);
+        translatedObj[key] = translated || value;
       } else {
         const result = applyTranslations(value, translations, [], [], currentPath);
         translatedObj[key] = result.translated;
@@ -460,41 +504,7 @@ function applyTranslations(
   };
 }
 
-// Вспомогательная функция для применения переводов к rich-text узлам
-function applyTranslationsToRichText(
-  node: any,
-  translations: Map<string, string>,
-  fieldPath: string
-): any {
-  if (!node || typeof node !== 'object') {
-    return node;
-  }
-
-  // Если это текстовый узел с переводом
-  if (shouldTranslateRichTextNode(node) && node.text) {
-    const textPath = `${fieldPath}.text`;
-    const translated = translations.get(textPath);
-    return {
-      ...node,
-      text: translated || node.text,
-    };
-  }
-
-  // Рекурсивно обрабатываем children
-  if (Array.isArray(node.children)) {
-    return {
-      ...node,
-      children: node.children.map((child: any, index: number) =>
-        applyTranslationsToRichText(child, translations, `${fieldPath}.children[${index}]`)
-      ),
-    };
-  }
-
-  return node;
-}
-
-// СТАРЫЕ ФУНКЦИИ УДАЛЕНЫ - используется новый батчинг подход
-// Старые функции: translateText, translateRichText, translateFields
+// Функция applyTranslationsToRichText больше не нужна - GPT возвращает готовый Markdown
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();

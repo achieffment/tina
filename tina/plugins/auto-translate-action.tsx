@@ -358,10 +358,21 @@ const TranslateButton: React.FC = () => {
               
               const isCurrentLocale = trans.locale === currentLocale;
               
-              // Формируем URL в зависимости от языка
-              const localeUrl = trans.locale === DEFAULT_LOCALE 
-                ? '/admin/index.html#/~/'
-                : `/admin/index.html#/~/${trans.locale}`;
+              // Получаем путь документа без локали и без расширения .mdx
+              // Например, "about.mdx" из "en/about.mdx" -> "about"
+              const relativePathParts = relativePath.split('/');
+              const documentPathWithExtension = relativePathParts.slice(1).join('/');
+              const documentPath = documentPathWithExtension.replace(/\.mdx$/, '');
+              
+              // Формируем URL в зависимости от языка, сохраняя путь к документу
+              let localeUrl: string;
+              if (trans.locale === DEFAULT_LOCALE) {
+                // Для основного языка: /admin/index.html#/~/about
+                localeUrl = documentPath ? `/admin/index.html#/~/${documentPath}` : '/admin/index.html#/~/';
+              } else {
+                // Для других языков: /admin/index.html#/~/ru/about
+                localeUrl = documentPath ? `/admin/index.html#/~/${trans.locale}/${documentPath}` : `/admin/index.html#/~/${trans.locale}`;
+              }
               
               return (
                 <a

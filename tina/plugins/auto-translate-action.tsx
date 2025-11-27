@@ -1,14 +1,92 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCMS, FormMetaPlugin } from 'tinacms';
+import { LOCALES, DEFAULT_LOCALE, type LocaleCode } from '@/lib/locales';
+
+interface ExistingTranslation {
+  locale: string;
+  path: string;
+  exists: boolean;
+}
 
 // Компонент кнопки перевода для левой панели
 const TranslateButton: React.FC = () => {
   const cms = useCMS();
   const [status, setStatus] = useState<string>('');
   const [isTranslating, setIsTranslating] = useState(false);
+  const [existingTranslations, setExistingTranslations] = useState<ExistingTranslation[]>([]);
+  const [selectedLocales, setSelectedLocales] = useState<Set<LocaleCode>>(new Set());
+  const [currentLocale, setCurrentLocale] = useState<string>('');
+  const [collection, setCollection] = useState<string>('');
+  const [relativePath, setRelativePath] = useState<string>('');
+  const [isSelectExpanded, setIsSelectExpanded] = useState<boolean>(false);
+
+  // Загружаем информацию о существующих переводах при монтировании
+  useEffect(() => {
+    const loadTranslations = async () => {
+      try {
+        if (!cms) return;
+
+        const activeForms = cms.state.forms || [];
+        if (activeForms.length === 0) return;
+
+        const form = activeForms[0].tinaForm;
+        if (!form) return;
+
+        const formId = form.id || '';
+        const pathMatch = formId.match(/^content\/(pages|posts|services)\/(.+)$/);
+        
+        if (!pathMatch) return;
+        
+        const collectionPlural = pathMatch[1];
+        const relPath = pathMatch[2];
+        
+        const collectionMap: Record<string, string> = {
+          'pages': 'page',
+          'posts': 'post',
+          'services': 'service'
+        };
+        
+        const coll = collectionMap[collectionPlural];
+        if (!coll) return;
+
+        setCollection(coll);
+        setRelativePath(relPath);
+
+        // Извлекаем текущую локаль
+        const currentLoc = relPath.split('/')[0];
+        setCurrentLocale(currentLoc);
+
+        // Запрашиваем существующие переводы
+        const response = await fetch('/api/check-translations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            collection: coll,
+            relativePath: relPath,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setExistingTranslations(data.translations || []);
+        }
+      } catch (error) {
+        console.error('Error loading translations:', error);
+      }
+    };
+
+    loadTranslations();
+  }, [cms]);
 
   const handleTranslate = async () => {
+    if (selectedLocales.size === 0) {
+      setStatus('❌ Выберите хотя бы один язык для перевода');
+      return;
+    }
+
     setIsTranslating(true);
     setStatus('Получение данных...');
 
@@ -28,116 +106,146 @@ const TranslateButton: React.FC = () => {
         throw new Error('Cannot access current form');
       }
 
-      // Получаем путь из form.id (формат: "content/pages/ru/home.mdx")
-      const formId = form.id || '';
-      console.log('Form ID:', formId);
-      
-      // Извлекаем collection и relative path из полного пути
-      // Формат: content/{collection}s/{locale}/{file}.mdx
-      const pathMatch = formId.match(/^content\/(pages|posts|services)\/(.+)$/);
-      
-      if (!pathMatch) {
-        throw new Error(`Cannot parse form ID: "${formId}"`);
-      }
-      
-      const collectionPlural = pathMatch[1]; // "pages", "posts", "services"
-      const relativePath = pathMatch[2]; // "ru/home.mdx"
-      
-      // Преобразуем множественное число в единственное
-      const collectionMap: Record<string, string> = {
-        'pages': 'page',
-        'posts': 'post',
-        'services': 'service'
-      };
-      
-      const collection = collectionMap[collectionPlural];
-      
-      console.log('Collection:', collection);
-      console.log('Relative path:', relativePath);
-      
-      if (!collection) {
-        throw new Error(`Unknown collection: "${collectionPlural}"`);
-      }
-
       // Получаем текущие значения формы
       const currentValues = form.finalForm.getState().values;
       
-      // Определяем текущую и целевую локаль из relativePath
       const relativePathParts = relativePath.split('/');
-      const currentLocale = relativePathParts[0]; // ru или en
-      const targetLocale = currentLocale === 'ru' ? 'en' : 'ru';
+      const filePathWithoutLocale = relativePathParts.slice(1).join('/');
       
       console.log('Current locale:', currentLocale);
-      console.log('Target locale:', targetLocale);
+      console.log('Selected locales:', Array.from(selectedLocales));
 
-      setStatus(`Перевод на ${targetLocale === 'en' ? 'английский' : 'русский'}...`);
+      const createdFiles: string[] = [];
+      const failedLocales: string[] = [];
 
-      // Вызываем API для перевода документа
-      const response = await fetch('/api/translate-document', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          document: currentValues,
-          targetLocale,
-          sourceLocale: currentLocale,
-          collection,
-        }),
-      });
+      // Переводим на каждый выбранный язык
+      for (const targetLocale of selectedLocales) {
+        try {
+          setStatus(`Перевод на ${LOCALES[targetLocale].nativeName}...`);
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Translation failed');
-      }
+          // Вызываем API для перевода документа
+          const response = await fetch('/api/translate-document', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              document: currentValues,
+              targetLocale,
+              sourceLocale: currentLocale,
+              collection,
+            }),
+          });
 
-      const { translatedDocument } = await response.json();
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Translation failed');
+          }
 
-      setStatus('Создание нового документа...');
+          const { translatedDocument } = await response.json();
 
-      // Формируем путь для нового документа
-      const newPathParts = [...relativePathParts];
-      newPathParts[0] = targetLocale;
-      const newRelativePath = newPathParts.join('/');
-      
-      console.log('New relative path:', newRelativePath);
+          setStatus(`Создание документа (${LOCALES[targetLocale].nativeName})...`);
 
-      // Создаём файл напрямую через наш API endpoint
-      const createFileResponse = await fetch('/api/create-translated-file', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          relativePath: newRelativePath,
-          collection,
-          document: translatedDocument,
-        }),
-      });
+          // Формируем путь для нового документа
+          const newRelativePath = `${targetLocale}/${filePathWithoutLocale}`;
+          
+          console.log('New relative path:', newRelativePath);
 
-      if (!createFileResponse.ok) {
-        const error = await createFileResponse.json();
-        throw new Error(error.error || 'Failed to create file');
-      }
+          // Создаём файл напрямую через наш API endpoint
+          const createFileResponse = await fetch('/api/create-translated-file', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              relativePath: newRelativePath,
+              collection,
+              document: translatedDocument,
+            }),
+          });
 
-      const { path: createdFilePath } = await createFileResponse.json();
-      console.log('Created file:', createdFilePath);
-      
-      setStatus(`✅ Документ переведён на ${targetLocale.toUpperCase()}!`);
-      setIsTranslating(false);
-      
-      // Ждём 2 секунды и предлагаем открыть
-      setTimeout(() => {
-        if (window.confirm('Хотите открыть переведённый документ?')) {
-          const editUrl = `/admin/index.html#/collections/${collection}/${newRelativePath}`;
-          window.location.href = editUrl;
+          if (!createFileResponse.ok) {
+            const error = await createFileResponse.json();
+            throw new Error(error.error || 'Failed to create file');
+          }
+
+          const { path: createdFilePath } = await createFileResponse.json();
+          console.log('Created file:', createdFilePath);
+          createdFiles.push(targetLocale);
+          
+        } catch (error) {
+          console.error(`Translation error for ${targetLocale}:`, error);
+          failedLocales.push(targetLocale);
         }
-      }, 2000);
+      }
+      
+      // Формируем итоговое сообщение
+      let finalStatus = '';
+      if (createdFiles.length > 0) {
+        const localeNames = createdFiles.map(loc => LOCALES[loc as LocaleCode].nativeName).join(', ');
+        finalStatus += `✅ Переведено на: ${localeNames}`;
+      }
+      if (failedLocales.length > 0) {
+        const localeNames = failedLocales.map(loc => LOCALES[loc as LocaleCode].nativeName).join(', ');
+        finalStatus += `\n❌ Ошибка: ${localeNames}`;
+      }
+      
+      setStatus(finalStatus);
+      setIsTranslating(false);
+      setSelectedLocales(new Set()); // Сбрасываем выбор
+      
+      // Обновляем список существующих переводов
+      setTimeout(async () => {
+        const response = await fetch('/api/check-translations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            collection,
+            relativePath,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setExistingTranslations(data.translations || []);
+        }
+      }, 1000);
       
     } catch (error) {
       console.error('Translation error:', error);
       setStatus(`❌ Ошибка: ${error instanceof Error ? error.message : 'Translation failed'}`);
       setIsTranslating(false);
+    }
+  };
+
+  // Проверяем, открыт ли документ на основном языке (английском)
+  const isDefaultLocale = currentLocale === DEFAULT_LOCALE;
+
+  // Получаем список доступных языков (исключаем текущий и уже существующие)
+  const existingLocales = new Set(existingTranslations.map(t => t.locale));
+  const availableLocales = Object.keys(LOCALES).filter(
+    locale => locale !== currentLocale && !existingLocales.has(locale)
+  ) as LocaleCode[];
+
+  const toggleLocale = (locale: LocaleCode) => {
+    const newSet = new Set(selectedLocales);
+    if (newSet.has(locale)) {
+      newSet.delete(locale);
+    } else {
+      newSet.add(locale);
+    }
+    setSelectedLocales(newSet);
+  };
+
+  const toggleAllLocales = () => {
+    if (selectedLocales.size === availableLocales.length) {
+      // Если все выбраны - снимаем все
+      setSelectedLocales(new Set());
+    } else {
+      // Выбираем все доступные
+      setSelectedLocales(new Set(availableLocales));
     }
   };
 
@@ -148,30 +256,273 @@ const TranslateButton: React.FC = () => {
       borderBottom: '1px solid #e5e7eb',
       marginBottom: '16px',
     }}>
-      <button
-        onClick={handleTranslate}
-        disabled={isTranslating}
-        style={{
-          width: '100%',
-          padding: '10px 16px',
-          backgroundColor: isTranslating ? '#9ca3af' : '#2296fe',
-          color: 'white',
-          border: 'none',
-          borderRadius: '6px',
-          fontSize: '14px',
-          fontWeight: '500',
-          cursor: isTranslating ? 'not-allowed' : 'pointer',
-          transition: 'background-color 0.2s',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '8px',
-        }}
-      >
-        <span style={{ fontSize: '16px' }}>🌐</span>
-        <span>{isTranslating ? 'Перевод...' : 'Перевести документ'}</span>
-      </button>
+      {/* Заголовок */}
+      <div style={{
+        fontSize: '13px',
+        fontWeight: '600',
+        color: '#374151',
+        marginBottom: '12px',
+      }}>
+        🌐 Переводы документа
+      </div>
 
+      {/* Существующие переводы */}
+      {existingTranslations.length > 0 && (
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{
+            fontSize: '11px',
+            color: '#6b7280',
+            marginBottom: '8px',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px',
+          }}>
+            Доступные языки
+          </div>
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '8px',
+          }}>
+            {existingTranslations.map(trans => {
+              const localeInfo = LOCALES[trans.locale as LocaleCode];
+              if (!localeInfo) return null;
+              
+              const isCurrentLocale = trans.locale === currentLocale;
+              
+              // Формируем URL в зависимости от языка
+              const localeUrl = trans.locale === DEFAULT_LOCALE 
+                ? '/admin/index.html#/~/'
+                : `/admin/index.html#/~/${trans.locale}`;
+              
+              return (
+                <a
+                  key={trans.locale}
+                  href={isCurrentLocale ? '#' : localeUrl}
+                  onClick={(e) => {
+                    if (isCurrentLocale) {
+                      e.preventDefault();
+                    }
+                  }}
+                  title={localeInfo.nativeName}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 10px',
+                    backgroundColor: isCurrentLocale ? '#2296fe' : 'white',
+                    color: isCurrentLocale ? 'white' : '#374151',
+                    border: `1px solid ${isCurrentLocale ? '#2296fe' : '#d1d5db'}`,
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    textDecoration: 'none',
+                    cursor: isCurrentLocale ? 'default' : 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isCurrentLocale) {
+                      e.currentTarget.style.borderColor = '#2296fe';
+                      e.currentTarget.style.backgroundColor = '#eff6ff';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isCurrentLocale) {
+                      e.currentTarget.style.borderColor = '#d1d5db';
+                      e.currentTarget.style.backgroundColor = 'white';
+                    }
+                  }}
+                >
+                  <span style={{ fontSize: '16px' }}>{localeInfo.flag}</span>
+                  <span style={{ fontWeight: '500' }}>{trans.locale.toUpperCase()}</span>
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Выбор языков для перевода - только для основного языка */}
+      {isDefaultLocale ? (
+        <>
+          {availableLocales.length > 0 && (
+            <div style={{ marginBottom: '16px' }}>
+              <button
+                onClick={() => setIsSelectExpanded(!isSelectExpanded)}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 12px',
+                  backgroundColor: 'white',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  color: '#374151',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  marginBottom: isSelectExpanded ? '12px' : '0',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#2296fe';
+                  e.currentTarget.style.backgroundColor = '#f9fafb';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                  e.currentTarget.style.backgroundColor = 'white';
+                }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>🌐</span>
+                  <span>Выбрать языки для перевода</span>
+                </span>
+                <span style={{
+                  transform: isSelectExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s',
+                  fontSize: '12px',
+                }}>
+                  ▼
+                </span>
+              </button>
+
+              {isSelectExpanded && (
+                <div>
+                  {/* Кнопка "Выбрать все / Снять все" */}
+                  <button
+                    onClick={toggleAllLocales}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      marginBottom: '8px',
+                      backgroundColor: 'white',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      color: '#2296fe',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#eff6ff';
+                      e.currentTarget.style.borderColor = '#2296fe';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'white';
+                      e.currentTarget.style.borderColor = '#d1d5db';
+                    }}
+                  >
+                    {selectedLocales.size === availableLocales.length ? '✓ Снять все' : 'Выбрать все'}
+                  </button>
+
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, 1fr)',
+                    gap: '8px',
+                  }}>
+                    {availableLocales.map(locale => {
+                      const localeInfo = LOCALES[locale];
+                      const isSelected = selectedLocales.has(locale);
+                      
+                      return (
+                        <label
+                          key={locale}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '8px 10px',
+                            backgroundColor: isSelected ? '#eff6ff' : 'white',
+                            border: `1px solid ${isSelected ? '#2296fe' : '#d1d5db'}`,
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isSelected) {
+                              e.currentTarget.style.borderColor = '#93c5fd';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isSelected) {
+                              e.currentTarget.style.borderColor = '#d1d5db';
+                            }
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleLocale(locale)}
+                            style={{
+                              width: '16px',
+                              height: '16px',
+                              cursor: 'pointer',
+                              accentColor: '#2296fe',
+                            }}
+                          />
+                          <span style={{ fontSize: '16px' }}>{localeInfo.flag}</span>
+                          <span style={{ fontWeight: '500', flex: 1 }}>
+                            {localeInfo.nativeName}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Кнопка перевода */}
+          <button
+            onClick={handleTranslate}
+            disabled={isTranslating || selectedLocales.size === 0}
+            style={{
+              width: '100%',
+              padding: '10px 16px',
+              backgroundColor: isTranslating || selectedLocales.size === 0 ? '#9ca3af' : '#2296fe',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '14px',
+              fontWeight: '500',
+              cursor: isTranslating || selectedLocales.size === 0 ? 'not-allowed' : 'pointer',
+              transition: 'background-color 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+            }}
+          >
+            <span style={{ fontSize: '16px' }}>🌐</span>
+            <span>
+              {isTranslating 
+                ? 'Перевод...' 
+                : selectedLocales.size > 0
+                ? `Перевести (${selectedLocales.size})`
+                : 'Выберите языки'
+              }
+            </span>
+          </button>
+        </>
+      ) : (
+        <div style={{
+          padding: '12px',
+          backgroundColor: '#fef3c7',
+          border: '1px solid #fbbf24',
+          borderRadius: '6px',
+          fontSize: '12px',
+          color: '#92400e',
+          lineHeight: '1.5',
+        }}>
+          <strong>ℹ️ Информация:</strong><br />
+          Переводы создаются только с английской версии документа. 
+          Откройте английскую версию для добавления новых переводов.
+        </div>
+      )}
+
+      {/* Статус */}
       {status && (
         <div style={{
           marginTop: '12px',
@@ -180,6 +531,7 @@ const TranslateButton: React.FC = () => {
           borderRadius: '6px',
           fontSize: '13px',
           color: status.includes('❌') ? '#991b1b' : status.includes('✅') ? '#166534' : '#1e40af',
+          whiteSpace: 'pre-line',
         }}>
           {status}
         </div>

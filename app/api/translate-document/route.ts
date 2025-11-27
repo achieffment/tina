@@ -9,13 +9,14 @@ import {
   type TinaField,
   type TinaTemplate
 } from './schema-analyzer';
+import { LOCALES, type LocaleCode } from '@/lib/locales';
 
 export const dynamic = 'force-dynamic';
 
 interface TranslateDocumentRequest {
   document: any;
-  targetLocale: 'ru' | 'en';
-  sourceLocale?: 'ru' | 'en';
+  targetLocale: LocaleCode;
+  sourceLocale?: LocaleCode;
   collection: string;
 }
 
@@ -23,8 +24,8 @@ interface TranslateDocumentRequest {
 async function translateRichText(
   node: any,
   apiKey: string,
-  targetLocale: 'ru' | 'en',
-  sourceLocale: 'ru' | 'en'
+  targetLocale: LocaleCode,
+  sourceLocale: LocaleCode
 ): Promise<any> {
   if (!node || typeof node !== 'object') {
     return node;
@@ -57,11 +58,11 @@ async function translateRichText(
 async function translateText(
   text: string,
   apiKey: string,
-  targetLocale: 'ru' | 'en',
-  sourceLocale: 'ru' | 'en'
+  targetLocale: LocaleCode,
+  sourceLocale: LocaleCode
 ): Promise<string> {
-  const targetLanguage = targetLocale === 'en' ? 'English' : 'Russian';
-  const sourceLanguage = sourceLocale === 'en' ? 'English' : 'Russian';
+  const targetLanguage = LOCALES[targetLocale]?.name || targetLocale;
+  const sourceLanguage = LOCALES[sourceLocale]?.name || sourceLocale;
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -102,8 +103,8 @@ async function translateFields(
   obj: any,
   schemaFields: TinaField[],
   apiKey: string,
-  targetLocale: 'ru' | 'en',
-  sourceLocale: 'ru' | 'en',
+  targetLocale: LocaleCode,
+  sourceLocale: LocaleCode,
   autoTranslatedFields: string[] = []
 ): Promise<{ translated: any; autoTranslatedFields: string[] }> {
   if (typeof obj !== 'object' || obj === null) {
@@ -265,7 +266,7 @@ async function translateFields(
 
 export async function POST(request: NextRequest) {
   try {
-    const { document, targetLocale, sourceLocale = 'ru', collection }: TranslateDocumentRequest = await request.json();
+    const { document, targetLocale, sourceLocale = 'en', collection }: TranslateDocumentRequest = await request.json();
 
     if (!document || !targetLocale || !collection) {
       return NextResponse.json(

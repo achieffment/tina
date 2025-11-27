@@ -7,7 +7,7 @@ import Author from "./collection/author";
 import Page from "./collection/page";
 import Tag from "./collection/tag";
 import Service from "./collection/service";
-import { addTranslateScreen } from "./plugins/auto-translate-action";
+import { addTranslateButton } from "./plugins/auto-translate-action";
 
 const config = defineConfig({
   clientId: process.env.NEXT_PUBLIC_TINA_CLIENT_ID!,
@@ -38,7 +38,7 @@ const config = defineConfig({
   },
   cmsCallback: (cms) => {
     cms.flags.set('branch-switcher', true)
-    addTranslateScreen(cms)
+    addTranslateButton(cms)
     return cms
   }
 });

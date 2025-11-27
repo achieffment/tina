@@ -1,9 +1,9 @@
 'use client';
 import React, { useState } from 'react';
-import { useCMS } from 'tinacms';
+import { useCMS, FormMetaPlugin } from 'tinacms';
 
-// Компонент Screen для перевода
-const TranslateScreen: React.FC<{ close: () => void }> = ({ close }) => {
+// Компонент кнопки перевода для левой панели
+const TranslateButton: React.FC = () => {
   const cms = useCMS();
   const [status, setStatus] = useState<string>('');
   const [isTranslating, setIsTranslating] = useState(false);
@@ -131,8 +131,6 @@ const TranslateScreen: React.FC<{ close: () => void }> = ({ close }) => {
         if (window.confirm('Хотите открыть переведённый документ?')) {
           const editUrl = `/admin/index.html#/collections/${collection}/${newRelativePath}`;
           window.location.href = editUrl;
-        } else {
-          close();
         }
       }, 2000);
       
@@ -145,103 +143,63 @@ const TranslateScreen: React.FC<{ close: () => void }> = ({ close }) => {
 
   return (
     <div style={{
-      padding: '40px',
-      maxWidth: '600px',
-      margin: '0 auto',
+      padding: '12px 16px',
+      backgroundColor: '#f9fafb',
+      borderBottom: '1px solid #e5e7eb',
+      marginBottom: '16px',
     }}>
-      <h2 style={{
-        fontSize: '24px',
-        fontWeight: 'bold',
-        marginBottom: '20px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-      }}>
-        <span>🌐</span>
-        <span>Автоперевод документа</span>
-      </h2>
-
-      <p style={{
-        marginBottom: '30px',
-        color: '#666',
-        lineHeight: '1.6',
-      }}>
-        Этот инструмент переведёт текущий документ на другой язык с помощью OpenAI GPT-4o-mini.
-        Переведённый документ будет создан в соответствующей папке локализации.
-      </p>
+      <button
+        onClick={handleTranslate}
+        disabled={isTranslating}
+        style={{
+          width: '100%',
+          padding: '10px 16px',
+          backgroundColor: isTranslating ? '#9ca3af' : '#2296fe',
+          color: 'white',
+          border: 'none',
+          borderRadius: '6px',
+          fontSize: '14px',
+          fontWeight: '500',
+          cursor: isTranslating ? 'not-allowed' : 'pointer',
+          transition: 'background-color 0.2s',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+        }}
+      >
+        <span style={{ fontSize: '16px' }}>🌐</span>
+        <span>{isTranslating ? 'Перевод...' : 'Перевести документ'}</span>
+      </button>
 
       {status && (
         <div style={{
-          padding: '15px',
-          backgroundColor: status.includes('❌') ? '#fee' : status.includes('✅') ? '#efe' : '#e3f2fd',
-          borderRadius: '8px',
-          marginBottom: '20px',
-          fontSize: '14px',
+          marginTop: '12px',
+          padding: '10px 12px',
+          backgroundColor: status.includes('❌') ? '#fee2e2' : status.includes('✅') ? '#dcfce7' : '#dbeafe',
+          borderRadius: '6px',
+          fontSize: '13px',
+          color: status.includes('❌') ? '#991b1b' : status.includes('✅') ? '#166534' : '#1e40af',
         }}>
           {status}
         </div>
       )}
-
-      <div style={{
-        display: 'flex',
-        gap: '10px',
-        marginTop: '30px',
-      }}>
-        <button
-          onClick={handleTranslate}
-          disabled={isTranslating}
-          style={{
-            flex: 1,
-            padding: '12px 24px',
-            backgroundColor: isTranslating ? '#ccc' : '#2296fe',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            fontSize: '16px',
-            fontWeight: '500',
-            cursor: isTranslating ? 'not-allowed' : 'pointer',
-            transition: 'background-color 0.2s',
-          }}
-        >
-          {isTranslating ? 'Перевод...' : '🌐 Перевести'}
-        </button>
-        
-        <button
-          onClick={close}
-          disabled={isTranslating}
-          style={{
-            padding: '12px 24px',
-            backgroundColor: 'transparent',
-            color: '#666',
-            border: '1px solid #ddd',
-            borderRadius: '8px',
-            fontSize: '16px',
-            fontWeight: '500',
-            cursor: isTranslating ? 'not-allowed' : 'pointer',
-          }}
-        >
-          Закрыть
-        </button>
-      </div>
     </div>
   );
 };
 
-// Экспорт Screen Plugin
-export const TranslateScreenPlugin = {
-  __type: 'screen' as const,
+// Создаём FormMetaPlugin для отображения кнопки в левой панели
+export const TranslateFormMetaPlugin = new FormMetaPlugin({
   name: 'translate-document',
-  Component: TranslateScreen,
-  Icon: () => <span style={{ fontSize: '20px' }}>🌐</span>,
-  layout: 'popup' as const,
-};
+  Component: TranslateButton,
+});
 
-// Функция для добавления Screen Plugin в CMS
-export const addTranslateScreen = (cms: any) => {
-  console.log('🌐 Adding Translate Screen Plugin to TinaCMS');
+// Функция для добавления плагина в CMS
+export const addTranslateButton = (cms: any) => {
+  console.log('🌐 Adding Translate Button to TinaCMS sidebar');
   
-  cms.plugins.add(TranslateScreenPlugin);
-  console.log('✅ Translate Screen Plugin added successfully');
+  cms.plugins.add(TranslateFormMetaPlugin);
+  console.log('✅ Translate Button added successfully');
   
   return cms;
 };

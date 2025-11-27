@@ -4,6 +4,7 @@ import client from '@/tina/__generated__/client';
 import Layout from '@/components/layout/layout';
 import { Section } from '@/components/layout/section';
 import ClientPage from './client-page';
+import { ALL_LOCALE_CODES, DEFAULT_LOCALE } from '@/lib/locales';
 
 export const revalidate = 300;
 
@@ -17,23 +18,23 @@ export default async function Page({
   
   // Определяем локаль и путь
   const firstSegment = urlSegments[0];
-  const isRussian = firstSegment === 'ru';
-  const locale = isRussian ? 'ru' : 'en';
+  const isLocaleSegment = ALL_LOCALE_CODES.includes(firstSegment as any);
+  const locale = isLocaleSegment ? firstSegment : DEFAULT_LOCALE;
   
   // Формируем путь к файлу
   let filepath: string;
-  if (isRussian) {
-    // Для русских маршрутов: /ru -> ru/home.mdx, /ru/about -> ru/about.mdx
+  if (isLocaleSegment) {
+    // Для локализованных маршрутов: /ru -> ru/home.mdx, /de/about -> de/about.mdx
     if (urlSegments.length === 1) {
-      // Только /ru - главная страница
-      filepath = 'ru/home';
+      // Только /{locale} - главная страница
+      filepath = `${locale}/home`;
     } else {
-      // /ru/about -> ru/about
+      // /{locale}/about -> {locale}/about
       filepath = urlSegments.join('/');
     }
   } else {
-    // Для английских маршрутов: /about -> en/about.mdx
-    filepath = `en/${urlSegments.join('/')}`;
+    // Для маршрутов основного языка (английский): /about -> en/about.mdx
+    filepath = `${DEFAULT_LOCALE}/${urlSegments.join('/')}`;
   }
 
   let data;
@@ -84,19 +85,19 @@ export async function generateStaticParams() {
       const locale = breadcrumbs[0];
       const pathParts = breadcrumbs.slice(1);
       
-      // Для английской локали: исключаем home (обрабатывается в app/page.tsx)
-      if (locale === 'en' && pathParts.length === 1 && pathParts[0] === 'home') {
+      // Для основного языка (английский): исключаем home (обрабатывается в app/page.tsx)
+      if (locale === DEFAULT_LOCALE && pathParts.length === 1 && pathParts[0] === 'home') {
         return null;
       }
       
-      // Для русской локали: home становится /ru
-      if (locale === 'ru' && pathParts.length === 1 && pathParts[0] === 'home') {
-        return { urlSegments: ['ru'] };
+      // Для всех остальных локалей: home становится /{locale}
+      if (locale !== DEFAULT_LOCALE && pathParts.length === 1 && pathParts[0] === 'home') {
+        return { urlSegments: [locale] };
       }
       
-      // Для английских маршрутов: en/about -> /about
-      // Для русских маршрутов: ru/about -> /ru/about
-      if (locale === 'en') {
+      // Для маршрутов основного языка: en/about -> /about
+      // Для маршрутов других локалей: ru/about -> /ru/about, de/about -> /de/about
+      if (locale === DEFAULT_LOCALE) {
         return { urlSegments: pathParts };
       } else {
         return { urlSegments: [locale, ...pathParts] };

@@ -211,6 +211,18 @@ export function wrapStringFields(fields: any[]): any[] {
 
     // Рекурсивно обрабатываем вложенные поля (для object и других типов)
     if (field.fields && Array.isArray(field.fields)) {
+      // Если это массив объектов (list: true), добавляем _autoTranslatedFields
+      if (field.list && field.type === 'object') {
+        return {
+          ...field,
+          fields: [
+            autoTranslatedFieldSchema,
+            ...wrapStringFields(field.fields),
+          ],
+        };
+      }
+      
+      // Для обычных объектов просто обрабатываем поля
       return {
         ...field,
         fields: wrapStringFields(field.fields),

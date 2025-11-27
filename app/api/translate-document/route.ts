@@ -467,7 +467,15 @@ function applyTranslations(
               [],
               `${currentPath}[${i}]`
             );
-            translatedArray.push(result.translated);
+            // Сохраняем _autoTranslatedFields для элементов массива
+            if (result.autoTranslatedFields.length > 0) {
+              translatedArray.push({
+                ...result.translated,
+                _autoTranslatedFields: result.autoTranslatedFields,
+              });
+            } else {
+              translatedArray.push(result.translated);
+            }
           }
           translatedObj[key] = translatedArray;
         } else {

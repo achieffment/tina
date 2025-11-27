@@ -34,6 +34,28 @@ interface CollectedText {
   index: number;
 }
 
+// Функция для генерации JSON Schema для Structured Outputs
+function generateTranslationSchema(textCount: number) {
+  const properties: Record<string, { type: string; description: string }> = {};
+  const required: string[] = [];
+
+  for (let i = 0; i < textCount; i++) {
+    const key = i.toString();
+    properties[key] = {
+      type: "string",
+      description: `Translation of text at index ${i}`
+    };
+    required.push(key);
+  }
+
+  return {
+    type: "object",
+    properties,
+    required,
+    additionalProperties: false
+  };
+}
+
 // НОВЫЙ ПОДХОД: Батчинг переводов
 // Функция для сбора всех текстов для перевода
 function collectTextsForTranslation(
@@ -182,19 +204,15 @@ async function batchTranslateTexts(
   const estimatedTokens = Math.ceil(totalChars / 4);
   console.log('[TRANSLATE:BATCH] Примерное количество токенов:', estimatedTokens);
 
-  const systemPrompt = `You are a professional translator. Translate the following JSON object from ${sourceLanguage} to ${targetLanguage}. 
+  // Упрощенный системный промпт - схема сама обеспечивает структуру
+  const systemPrompt = `You are a professional translator. Translate each value in the JSON object from ${sourceLanguage} to ${targetLanguage}. Preserve all formatting, markdown syntax, line breaks, and special characters.`;
 
-IMPORTANT RULES:
-1. Return ONLY a valid JSON object with the same keys
-2. Translate only the VALUES, keep the keys unchanged
-3. Preserve all formatting, markdown syntax, line breaks, and special characters in the values
-4. Do not add any explanations or additional content
-5. Ensure the output is valid JSON
-
-Example input: {"0": "Hello world", "1": "Welcome"}
-Example output: {"0": "Hallo Welt", "1": "Willkommen"}`;
-
-  console.log('[TRANSLATE:BATCH] Системный промпт:', systemPrompt.substring(0, 150) + '...');
+  console.log('[TRANSLATE:BATCH] Системный промпт:', systemPrompt);
+  console.log('[TRANSLATE:BATCH] Использование: Structured Outputs (JSON Schema)');
+  console.log('[TRANSLATE:BATCH] Схема:', texts.length, 'полей с strict mode');
+  
+  // Генерируем JSON Schema для Structured Outputs
+  const translationSchema = generateTranslationSchema(texts.length);
   
   const apiStartTime = Date.now();
 
@@ -218,7 +236,14 @@ Example output: {"0": "Hallo Welt", "1": "Willkommen"}`;
           },
         ],
         temperature: 0.3,
-        response_format: { type: "json_object" }
+        response_format: { 
+          type: "json_schema",
+          json_schema: {
+            name: "translation_batch_response",
+            strict: true,
+            schema: translationSchema
+          }
+        }
       }),
     });
 
@@ -243,27 +268,15 @@ Example output: {"0": "Hallo Welt", "1": "Willkommen"}`;
       });
     }
 
-    // Парсим JSON ответ
-    let translatedTexts: Record<string, string>;
-    try {
-      translatedTexts = JSON.parse(translatedContent);
-    } catch (parseError) {
-      console.error('[TRANSLATE:BATCH] Ошибка парсинга JSON:', parseError);
-      console.error('[TRANSLATE:BATCH] Полученный контент:', translatedContent.substring(0, 500));
-      throw new Error('Failed to parse translation response');
-    }
+    // Парсим JSON ответ - Structured Outputs гарантирует корректный JSON
+    const translatedTexts: Record<string, string> = JSON.parse(translatedContent);
 
     // Создаем карту переводов по путям
+    // Structured Outputs гарантирует наличие всех ключей, проверка на undefined не нужна
     const translationMap = new Map<string, string>();
     texts.forEach((item) => {
       const translated = translatedTexts[item.index.toString()];
-      if (translated) {
-        translationMap.set(item.path, translated);
-      } else {
-        // Если перевод не найден, используем оригинальный текст
-        console.warn('[TRANSLATE:BATCH] Перевод не найден для индекса', item.index, '- используем оригинал');
-        translationMap.set(item.path, item.text);
-      }
+      translationMap.set(item.path, translated);
     });
 
     console.log('[TRANSLATE:BATCH] Успешно переведено:', translationMap.size, 'текстов');

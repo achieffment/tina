@@ -1,7 +1,6 @@
 import { advantageBlockSchema } from "@/components/blocks/advantage";
 import type { Collection } from "tinacms";
 import { wrapStringFields } from '@/tina/plugins/auto-translation-indicator';
-import { translatableString } from '@/tina/fields/translatable';
 
 const Service: Collection = {
     label: "Services",
@@ -22,16 +21,20 @@ const Service: Collection = {
         },
     },
     fields: wrapStringFields([
-        translatableString({
+        {
+            type: "string",
             label: "Name",
             name: "name",
             isTitle: true,
             required: true,
-        }),
-        translatableString({
+            translatable: true,
+        },
+        {
+            type: "string",
             label: "Description",
             name: "description",
-        }),
+            translatable: true,
+        },
         {
             type: 'object',
             list: true,

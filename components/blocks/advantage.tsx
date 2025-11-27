@@ -2,7 +2,6 @@ import type { Template } from "tinacms";
 import { tinaField } from "tinacms/dist/react";
 import { PageBlocksAdvantage, ServiceBlocksAdvantage } from "@/tina/__generated__/types";
 import { Section } from "../layout/section";
-import { translatableString } from '@/tina/fields/translatable';
 import { sectionBlockSchemaField } from '../layout/section';
 import Image from 'next/image';
 
@@ -62,14 +61,18 @@ export const advantageBlockSchema: Template = {
     },
     fields: [
         sectionBlockSchemaField as any,
-        translatableString({
+        {
+            type: "string",
             label: "Title",
             name: "title",
-        }),
-        translatableString({
+            translatable: true,
+        },
+        {
+            type: "string",
             label: "Description",
             name: "description",
-        }),
+            translatable: true,
+        },
         {
             type: "object",
             label: "Image",
@@ -80,10 +83,12 @@ export const advantageBlockSchema: Template = {
                     label: "Image Source",
                     type: "image",
                 },
-                translatableString({
+                {
+                    type: "string",
                     name: "alt",
                     label: "Alt Text",
-                })
+                    translatable: true,
+                }
             ],
         },
     ],

@@ -4,7 +4,6 @@ import { PageBlocksRawAi } from "@/tina/__generated__/types";
 import { Section } from "../layout/section";
 import { sectionBlockSchemaField } from '../layout/section';
 import Image from 'next/image';
-import { translatableString } from '@/tina/fields/translatable';
 
 export const RawAi = ({ data }: { data: PageBlocksRawAi }) => {
     return (
@@ -69,18 +68,24 @@ export const rawAiBlockSchema: Template = {
     },
     fields: [
         sectionBlockSchemaField as any,
-        translatableString({
+        {
+            type: "string",
             label: "Suptitle",
             name: "suptitle",
-        }),
-        translatableString({
+            translatable: true,
+        },
+        {
+            type: "string",
             label: "Title",
             name: "title",
-        }),
-        translatableString({
+            translatable: true,
+        },
+        {
+            type: "string",
             label: "Text",
             name: "text",
-        }),
+            translatable: true,
+        },
         {
             type: "object",
             label: "Image",
@@ -91,10 +96,12 @@ export const rawAiBlockSchema: Template = {
                     label: "Image Source",
                     type: "image",
                 },
-                translatableString({
+                {
+                    type: "string",
                     name: "alt",
                     label: "Alt Text",
-                })
+                    translatable: true,
+                }
             ],
         },
     ],

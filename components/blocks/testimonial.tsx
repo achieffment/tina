@@ -6,7 +6,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import { Card, CardContent } from "../ui/card";
 import { tinaField } from "tinacms/dist/react";
 import { sectionBlockSchemaField } from '../layout/section';
-import { translatableString } from '@/tina/fields/translatable';
 
 export const Testimonial = ({ data }: { data: PageBlocksTestimonial }) => {
   return (
@@ -66,17 +65,21 @@ export const testimonialBlockSchema: Template = {
   },
   fields: [
     sectionBlockSchemaField as any,
-    translatableString({
+    {
+      type: "string",
       label: "Title",
       name: "title",
-    }),
-    translatableString({
+      translatable: true,
+    },
+    {
+      type: "string",
       label: "Description",
       name: "description",
+      translatable: true,
       ui: {
         component: "textarea",
       },
-    }),
+    },
     {
       type: "object",
       list: true,
@@ -94,21 +97,27 @@ export const testimonialBlockSchema: Template = {
         },
       },
       fields: [
-        translatableString({
+        {
+          type: "string",
+          label: "Quote",
+          name: "quote",
+          translatable: true,
           ui: {
             component: "textarea",
           },
-          label: "Quote",
-          name: "quote",
-        }),
-        translatableString({
+        },
+        {
+          type: "string",
           label: "Author",
           name: "author",
-        }),
-        translatableString({
+          translatable: true,
+        },
+        {
+          type: "string",
           label: "Role",
           name: "role",
-        }),
+          translatable: true,
+        },
         {
           type: "image",
           label: "Avatar",

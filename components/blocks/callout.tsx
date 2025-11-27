@@ -5,7 +5,6 @@ import { tinaField } from 'tinacms/dist/react';
 import { PageBlocksCallout } from '@/tina/__generated__/types';
 import { ArrowRight } from 'lucide-react';
 import { Section, sectionBlockSchemaField } from '../layout/section';
-import { translatableString } from '@/tina/fields/translatable';
 
 export const Callout = ({ data }: { data: PageBlocksCallout }) => {
     return (
@@ -49,10 +48,12 @@ export const calloutBlockSchema: Template = {
     },
     fields: [
         sectionBlockSchemaField as any,
-        translatableString({
+        {
+            type: 'string',
             label: 'Text',
             name: 'text',
-        }),
+            translatable: true,
+        },
         {
             type: 'string',
             label: 'Url',

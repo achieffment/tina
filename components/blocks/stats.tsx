@@ -3,7 +3,6 @@ import { tinaField } from "tinacms/dist/react";
 import { PageBlocksStats } from "@/tina/__generated__/types";
 import { Section } from "../layout/section";
 import { sectionBlockSchemaField } from '../layout/section';
-import { translatableString } from '@/tina/fields/translatable';
 
 export const Stats = ({ data }: { data: PageBlocksStats }) => {
     return (
@@ -54,14 +53,18 @@ export const statsBlockSchema: Template = {
     },
     fields: [
         sectionBlockSchemaField as any,
-        translatableString({
+        {
+            type: "string",
             label: "Title",
             name: "title",
-        }),
-        translatableString({
+            translatable: true,
+        },
+        {
+            type: "string",
             label: "Description",
             name: "description",
-        }),
+            translatable: true,
+        },
         {
             type: "object",
             label: "Stats",
@@ -84,10 +87,12 @@ export const statsBlockSchema: Template = {
                     label: "Stat",
                     name: "stat",
                 },
-                translatableString({
+                {
+                    type: "string",
                     label: "Type",
                     name: "type",
-                }),
+                    translatable: true,
+                },
             ],
         },
     ],

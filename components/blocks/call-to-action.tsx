@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { PageBlocksCta } from '@/tina/__generated__/types';
 import { Icon } from '../icon';
 import { Section } from '../layout/section';
-import { translatableString } from '@/tina/fields/translatable';
 
 export const CallToAction = ({ data }: { data: PageBlocksCta }) => {
     return (
@@ -63,17 +62,21 @@ export const ctaBlockSchema: Template = {
         },
     },
     fields: [
-        translatableString({
+        {
+            type: "string",
             label: "Title",
             name: "title",
-        }),
-        translatableString({
+            translatable: true,
+        } as any,
+        {
+            type: "string",
             label: "Description",
             name: "description",
+            translatable: true,
             ui: {
                 component: "textarea",
             },
-        }),
+        } as any,
         {
             label: 'Actions',
             name: 'actions',
@@ -93,10 +96,12 @@ export const ctaBlockSchema: Template = {
                 itemProps: (item) => ({ label: item.label }),
             },
             fields: [
-                translatableString({
+                {
+                    type: 'string',
                     label: 'Label',
                     name: 'label',
-                }),
+                    translatable: true,
+                },
                 {
                     label: 'Type',
                     name: 'type',
